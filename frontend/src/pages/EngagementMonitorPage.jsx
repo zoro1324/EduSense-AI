@@ -1,14 +1,42 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
-import { periodEngagementToday } from '../data/appData';
 import { Badge, Card, CardBody, CardHeader, PageContainer, PageTitle } from '../components/ui/UIPrimitives';
 import { BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { api } from '../lib/api';
 
 export const EngagementMonitorPage = () => {
-  const current = 22;
-  const engaged = 19;
-  const distracted = 9;
+  const [logs, setLogs] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await api.get('/engagement/today/');
+        setLogs(Array.isArray(data) ? data : []);
+      } catch (error) {
+        setLogs([]);
+      }
+    };
+    load();
+  }, []);
+
+  const current = logs.length ? Math.round(logs[logs.length - 1].engagement_percent || 0) : 0;
+  const engaged = logs.length ? logs[logs.length - 1].engaged_count || 0 : 0;
+  const distracted = logs.length ? logs[logs.length - 1].distracted_count || 0 : 0;
   const status = current >= 70 ? 'High' : current >= 40 ? 'Medium' : 'Low';
+  const periodEngagementToday = useMemo(() => {
+    const map = new Map();
+    logs.forEach((x) => {
+      const key = `Period ${x.period}`;
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key).push(Number(x.engagement_percent || 0));
+    });
+    return Array.from(map.entries()).map(([period, values]) => {
+      const today = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+      return { period, today, yesterday: today };
+    });
+  }, [logs]);
   const barData = periodEngagementToday.map((x) => ({ ...x, color: x.today >= 75 ? '#22c55e' : x.today >= 50 ? '#eab308' : '#ef4444' }));
 
   const statusTone = useMemo(() => (status === 'High' ? 'success' : status === 'Medium' ? 'warning' : 'danger'), [status]);
