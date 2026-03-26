@@ -1,3 +1,4 @@
 from .ai_report_service import AIReportService
+from .face_recognition_service import FaceRecognitionService
 from .face_registration_service import FaceRegistrationService
 from .notification_service import NotificationService

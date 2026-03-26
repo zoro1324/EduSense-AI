@@ -1,6 +1,7 @@
 from django.urls import path
 
 from api.views.attendance import (
+    AttendanceCameraMarkView,
     AttendanceDailyView,
     AttendanceDetailUpdateView,
     AttendanceListView,
@@ -89,6 +90,7 @@ urlpatterns = [
     path("students/bulk-upload/", StudentBulkUploadView.as_view()),
 
     path("attendance/mark/", AttendanceMarkView.as_view()),
+    path("attendance/camera-mark/", AttendanceCameraMarkView.as_view()),
     path("attendance/mark-bulk/", AttendanceMarkBulkView.as_view()),
     path("attendance/", AttendanceListView.as_view()),
     path("attendance/today/", AttendanceTodayView.as_view()),
