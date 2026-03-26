@@ -36,7 +36,7 @@ export const Badge = ({ children, tone = 'default' }) => {
   return <span className={`inline-flex px-2 py-1 rounded-md text-xs font-medium ${styles[tone]}`}>{children}</span>;
 };
 
-export const Button = ({ children, variant = 'primary', className = '', loading = false, ...props }) => {
+export const Button = ({ children, variant = 'primary', size = 'md', className = '', loading = false, ...props }) => {
   const styles = {
     primary: 'bg-primary hover:bg-indigo-400 text-white',
     danger: 'bg-danger hover:bg-red-400 text-white',
@@ -44,9 +44,17 @@ export const Button = ({ children, variant = 'primary', className = '', loading 
     warning: 'bg-warning hover:bg-yellow-400 text-slate-900',
     ghost: 'bg-slate-700 hover:bg-slate-600 text-slate-100',
     outline: 'border border-border bg-transparent hover:bg-slate-800 text-slate-100',
+    secondary: 'bg-slate-700 hover:bg-slate-600 text-slate-100',
   };
+  
+  const sizes = {
+    sm: 'px-2 py-1 text-xs',
+    md: 'px-3 py-2 text-sm',
+    lg: 'px-4 py-3 text-base',
+  };
+  
   return (
-    <button className={`px-3 py-2 rounded-lg text-sm font-medium transition inline-flex items-center justify-center gap-2 disabled:opacity-60 ${styles[variant]} ${className}`} {...props}>
+    <button className={`rounded-lg font-medium transition inline-flex items-center justify-center gap-2 disabled:opacity-60 ${sizes[size]} ${styles[variant]} ${className}`} {...props}>
       {loading ? <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : null}
       {children}
     </button>
