@@ -1,32 +1,29 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Button, Input, Select } from '../components/ui/UIPrimitives';
+import { Button, Input } from '../components/ui/UIPrimitives';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, authLoading } = useAuth();
   const [email, setEmail] = useState('admin@edusense.ai');
   const [password, setPassword] = useState('demo123');
-  const [role, setRole] = useState('Admin');
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError('');
     if (!email || !password) {
       setError('Please enter both email and password.');
       return;
     }
-    setLoading(true);
-    setTimeout(() => {
-      const ok = login(email, password, role);
-      if (ok) navigate('/dashboard');
-      else setError('Invalid credentials.');
-      setLoading(false);
-    }, 700);
+    const result = await login(email, password);
+    if (result.ok) {
+      navigate('/dashboard');
+      return;
+    }
+    setError(result.error || 'Invalid credentials.');
   };
 
   return (
@@ -52,15 +49,7 @@ export const LoginPage = () => {
               </button>
             </div>
           </div>
-          <div>
-            <label className="text-sm text-muted">Role</label>
-            <Select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option>Admin</option>
-              <option>Teacher</option>
-              <option>Staff</option>
-            </Select>
-          </div>
-          <Button type="submit" className="w-full" loading={loading}>Login</Button>
+          <Button type="submit" className="w-full" loading={authLoading}>Login</Button>
           <div className="text-right text-xs text-indigo-300 hover:text-indigo-200 cursor-pointer">Forgot password?</div>
           {error ? <p className="text-sm text-danger">{error}</p> : null}
         </form>

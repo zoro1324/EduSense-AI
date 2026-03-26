@@ -1,23 +1,40 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
-import { safetyAlerts } from '../data/appData';
 import { Badge, Button, Card, CardBody, CardHeader, Input, PageContainer, PageTitle, Select } from '../components/ui/UIPrimitives';
 import { Modal } from '../components/ui/Modal';
 import { TableWrapper } from '../components/ui/Table';
 import { useToast } from '../components/ui/ToastContext';
+import { api } from '../lib/api';
 
 export const SafetyMonitorPage = () => {
   const [location, setLocation] = useState('Block A');
   const [snapshot, setSnapshot] = useState(null);
-  const [alerts, setAlerts] = useState(safetyAlerts);
+  const [alerts, setAlerts] = useState([]);
   const { pushToast } = useToast();
 
-  const threat = 'Warning';
-  const unresolved = useMemo(() => alerts.filter((a) => a.status === 'Unresolved'), [alerts]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await api.get('/safety/alerts/');
+        setAlerts(Array.isArray(data) ? data : []);
+      } catch (error) {
+        setAlerts([]);
+      }
+    };
+    load();
+  }, []);
 
-  const resolveAlert = (id) => {
-    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'Resolved' } : a)));
-    pushToast('Alert resolved', 'success');
+  const threat = 'Warning';
+  const unresolved = useMemo(() => alerts.filter((a) => a.status === 'unresolved'), [alerts]);
+
+  const resolveAlert = async (id) => {
+    try {
+      await api.post(`/safety/alerts/${id}/resolve/`, { resolution_note: 'Resolved from dashboard' });
+      setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'resolved' } : a)));
+      pushToast('Alert resolved', 'success');
+    } catch (error) {
+      pushToast(error.message || 'Failed to resolve alert', 'error');
+    }
   };
 
   return (
@@ -45,10 +62,10 @@ export const SafetyMonitorPage = () => {
               <CardHeader title="Live Alert Feed" />
               <CardBody className="space-y-2 max-h-[360px] overflow-auto thin-scrollbar">
                 {alerts.map((a) => (
-                  <div key={a.id} className={`p-3 rounded-lg border-l-4 ${a.level === 'Alert' ? 'border-red-500' : a.level === 'Warning' ? 'border-yellow-500' : 'border-green-500'} bg-slate-900 border border-border`}>
+                  <div key={a.id} className={`p-3 rounded-lg border-l-4 ${a.threat_level === 'high' ? 'border-red-500' : a.threat_level === 'medium' ? 'border-yellow-500' : 'border-green-500'} bg-slate-900 border border-border`}>
                     <div className="flex items-center justify-between">
-                      <Badge tone={a.level === 'Alert' ? 'danger' : a.level === 'Warning' ? 'warning' : 'success'}>{a.level}</Badge>
-                      <span className="text-xs text-muted">{a.timestamp}</span>
+                      <Badge tone={a.threat_level === 'high' ? 'danger' : a.threat_level === 'medium' ? 'warning' : 'success'}>{a.threat_level}</Badge>
+                      <span className="text-xs text-muted">{new Date(a.timestamp).toLocaleTimeString()}</span>
                     </div>
                     <p className="text-sm mt-2">{a.location}</p>
                     <div className="flex gap-2 mt-3 flex-wrap">
@@ -86,11 +103,11 @@ export const SafetyMonitorPage = () => {
               rows={alerts}
               renderRow={(a) => (
                 <tr key={a.id} className="border-b border-border hover:bg-slate-800/60">
-                  <td className="px-3 py-2">{a.timestamp}</td>
+                  <td className="px-3 py-2">{new Date(a.timestamp).toLocaleString()}</td>
                   <td className="px-3 py-2">{a.location}</td>
                   <td className="px-3 py-2"><Button variant="outline" className="text-xs px-2 py-1" onClick={() => setSnapshot(a)}>View</Button></td>
-                  <td className="px-3 py-2"><Badge tone={a.level === 'Alert' ? 'danger' : a.level === 'Warning' ? 'warning' : 'success'}>{a.level}</Badge></td>
-                  <td className="px-3 py-2"><Badge tone={a.status === 'Unresolved' ? 'danger' : 'success'}>{a.status}</Badge></td>
+                  <td className="px-3 py-2"><Badge tone={a.threat_level === 'high' ? 'danger' : a.threat_level === 'medium' ? 'warning' : 'success'}>{a.threat_level}</Badge></td>
+                  <td className="px-3 py-2"><Badge tone={a.status === 'unresolved' ? 'danger' : 'success'}>{a.status}</Badge></td>
                   <td className="px-3 py-2 flex gap-2"><Button variant="success" className="text-xs px-2 py-1" onClick={() => resolveAlert(a.id)}>Resolve</Button><Button variant="outline" className="text-xs px-2 py-1" onClick={() => setSnapshot(a)}>View</Button></td>
                 </tr>
               )}
@@ -102,8 +119,8 @@ export const SafetyMonitorPage = () => {
           {snapshot ? (
             <div className="space-y-3">
               <div className="h-56 bg-slate-700/40 border border-border rounded-lg grid place-items-center text-muted">Image placeholder ({snapshot.snapshot})</div>
-              <p className="text-sm text-muted">{snapshot.timestamp} · {snapshot.location}</p>
-              <Badge tone={snapshot.level === 'Alert' ? 'danger' : snapshot.level === 'Warning' ? 'warning' : 'success'}>{snapshot.level}</Badge>
+              <p className="text-sm text-muted">{new Date(snapshot.timestamp).toLocaleString()} · {snapshot.location}</p>
+              <Badge tone={snapshot.threat_level === 'high' ? 'danger' : snapshot.threat_level === 'medium' ? 'warning' : 'success'}>{snapshot.threat_level}</Badge>
             </div>
           ) : null}
         </Modal>
