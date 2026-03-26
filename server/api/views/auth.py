@@ -1,3 +1,4 @@
+import logging
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework import permissions, status
 from rest_framework.views import APIView
@@ -6,17 +7,33 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from api.serializers import ChangePasswordSerializer, UserCreateSerializer, UserSerializer
 from api.views import error_response, success_response
 
+logger = logging.getLogger(__name__)
+
 
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    def options(self, request, *args, **kwargs):
+        logger.debug(f"[CORS] OPTIONS preflight request from: {request.META.get('HTTP_ORIGIN', 'unknown')}")
+        return super().options(request, *args, **kwargs)
+
     def post(self, request):
         try:
+            logger.debug(f"[LOGIN] POST request received from: {request.META.get('HTTP_ORIGIN', 'unknown')}")
+            logger.debug(f"[LOGIN] Request headers: {dict(request.headers)}")
+            logger.debug(f"[LOGIN] Request data: {request.data}")
+            
             email = request.data.get("email")
             password = request.data.get("password")
+            
+            logger.debug(f"[LOGIN] Attempting authentication with email: {email}")
             user = authenticate(request, username=email, password=password)
+            
             if not user:
+                logger.warning(f"[LOGIN] Authentication failed for email: {email}")
                 return error_response("Invalid credentials", status.HTTP_401_UNAUTHORIZED)
+            
+            logger.info(f"[LOGIN] User authenticated successfully: {email}")
             refresh = RefreshToken.for_user(user)
             return success_response(
                 {
@@ -26,6 +43,7 @@ class LoginView(APIView):
                 }
             )
         except Exception as exc:
+            logger.error(f"[LOGIN] Exception occurred: {str(exc)}", exc_info=True)
             return error_response(exc, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

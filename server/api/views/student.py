@@ -1,17 +1,24 @@
 import csv
 import io
+import logging
+from typing import cast
 
 from django.db.models import Count
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.views import APIView
 
 from api.models import Parent, Student
+from api.services import FaceRegistrationService
 from api.serializers import StudentSerializer
 from api.views import error_response, success_response
 
+logger = logging.getLogger(__name__)
+
 
 class StudentListCreateView(APIView):
+    parser_classes = [MultiPartParser, JSONParser]
+
     def get(self, request):
         try:
             students = Student.objects.filter(is_active=True).order_by("name")
@@ -21,11 +28,37 @@ class StudentListCreateView(APIView):
 
     def post(self, request):
         try:
-            serializer = StudentSerializer(data=request.data)
+            logger.debug(f"[STUDENT] POST request received. Content-Type: {request.META.get('CONTENT_TYPE', 'unknown')}")
+            logger.debug(f"[STUDENT] Request data: {request.data}")
+            logger.debug(f"[STUDENT] Request files: {request.FILES}")
+            
+            # Extract parent data from flattened FormData
+            data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
+            parent_data = {}
+            parent_fields = ['father_name', 'mother_name', 'whatsapp_number', 'phone_number', 'email']
+            
+            for field in parent_fields:
+                key = f'parent.{field}'
+                if key in data:
+                    parent_data[field] = data.pop(key)
+            
+            if parent_data:
+                data['parent'] = parent_data
+            
+            # Handle photo file
+            if 'photo' in request.FILES:
+                data['photo'] = request.FILES['photo']
+            
+            logger.debug(f"[STUDENT] Processed data: {data}")
+            
+            serializer = StudentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
-            student = serializer.save()
+            student = cast(Student, serializer.save())
+            
+            logger.info(f"[STUDENT] Student created successfully: {student.name}")
             return success_response(StudentSerializer(student).data, status.HTTP_201_CREATED)
         except Exception as exc:
+            logger.error(f"[STUDENT] Error creating student: {str(exc)}", exc_info=True)
             return error_response(exc, status.HTTP_400_BAD_REQUEST)
 
 
@@ -90,20 +123,43 @@ class StudentProfileView(APIView):
 
 
 class RegisterFaceView(APIView):
-    parser_classes = [MultiPartParser]
+    parser_classes = [MultiPartParser, JSONParser]
 
     def post(self, request, pk):
         try:
+            logger.debug(f"[FACE_REGISTER] POST request for student {pk}")
+            logger.debug(f"[FACE_REGISTER] Request files: {request.FILES}")
+            logger.debug(f"[FACE_REGISTER] Request data: {request.data}")
+            
             student = Student.objects.get(pk=pk)
-            face_embedding_path = request.data.get("face_embedding_path", "")
-            student.face_embedding_path = face_embedding_path
+            image_file = request.FILES.get("face_image") or request.FILES.get("file")
+            service = FaceRegistrationService()
+            result = service.register_face(student=student, image_file=image_file)
+
+            if not result.success:
+                logger.warning(f"[FACE_REGISTER] Registration failed for student {pk}: {result.message}")
+                return error_response(result.message, status.HTTP_400_BAD_REQUEST)
+
+            student.face_embedding_path = result.embedding_path
             student.face_registered = True
             student.save(update_fields=["face_embedding_path", "face_registered"])
-            return success_response({"message": "Face registered", "student_id": student.student_id})
+
+            logger.info(f"[FACE_REGISTER] Face registered successfully for student: {student.name}")
+            return success_response(
+                {
+                    "message": result.message,
+                    "student_id": student.student_id,
+                    "embedding_path": result.embedding_path,
+                    "source": result.source,
+                }
+            )
+                    
         except Student.DoesNotExist:
+            logger.error(f"[FACE_REGISTER] Student not found: {pk}")
             return error_response("Student not found", status.HTTP_404_NOT_FOUND)
         except Exception as exc:
-            return error_response(exc, status.HTTP_400_BAD_REQUEST)
+            logger.error(f"[FACE_REGISTER] Exception occurred: {str(exc)}", exc_info=True)
+            return error_response(f"Face registration failed: {str(exc)}", status.HTTP_400_BAD_REQUEST)
 
 
 class StudentBulkUploadView(APIView):
