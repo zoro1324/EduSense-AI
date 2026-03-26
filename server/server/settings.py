@@ -154,6 +154,9 @@ TWILIO_SMS_FROM = config('TWILIO_SMS_FROM', default='')
 GROQ_API_KEY = config('GROQ_API_KEY', default='')
 ADMIN_PHONE = config('ADMIN_PHONE', default='')
 SCHOOL_NAME = config('SCHOOL_NAME', default='Your School Name')
+ESP32_DEVICE_TOKEN = config('ESP32_DEVICE_TOKEN', default='')
+ESP32_FACE_MATCH_THRESHOLD = config('ESP32_FACE_MATCH_THRESHOLD', cast=float, default=0.6)
+ESP32_DEFAULT_PERIOD = config('ESP32_DEFAULT_PERIOD', cast=int, default=1)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
