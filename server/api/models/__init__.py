@@ -1,3 +1,4 @@
+from .academic import FacultyProfile, SchoolClass, TimetableEntry
 from .attendance import AttendanceRecord
 from .engagement import EngagementLog, PeriodEngagementSummary
 from .leave import LeaveRequest, UnexcusedAbsence

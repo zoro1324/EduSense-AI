@@ -1,14 +1,47 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
-import { attendanceLast7Days, students } from '../data/appData';
 import { Badge, Button, Card, CardBody, CardHeader, Input, PageContainer, PageTitle } from '../components/ui/UIPrimitives';
+import { api } from '../lib/api';
 
 export const LiveAttendancePage = () => {
+  const [students, setStudents] = useState([]);
+  const [attendanceToday, setAttendanceToday] = useState([]);
   const [streamOn, setStreamOn] = useState(true);
   const [search, setSearch] = useState('');
 
-  const presentCount = attendanceLast7Days[attendanceLast7Days.length - 1].present;
-  const list = useMemo(() => students.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()) || s.roll.toLowerCase().includes(search.toLowerCase())), [search]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [studentsData, attendanceData] = await Promise.all([
+          api.get('/students/'),
+          api.get('/attendance/today/'),
+        ]);
+        setStudents(Array.isArray(studentsData) ? studentsData : []);
+        setAttendanceToday(Array.isArray(attendanceData) ? attendanceData : []);
+      } catch (error) {
+        setStudents([]);
+        setAttendanceToday([]);
+      }
+    };
+    load();
+  }, []);
+
+  const statusByStudent = useMemo(() => {
+    const map = new Map();
+    attendanceToday.forEach((row) => {
+      map.set(row.student, row.status);
+    });
+    return map;
+  }, [attendanceToday]);
+
+  const presentCount = attendanceToday.filter((x) => x.status === 'present').length;
+  const list = useMemo(
+    () =>
+      students.filter(
+        (s) => s.name.toLowerCase().includes(search.toLowerCase()) || s.roll_number.toLowerCase().includes(search.toLowerCase())
+      ),
+    [students, search]
+  );
 
   return (
     <AppShell>
@@ -48,17 +81,17 @@ export const LiveAttendancePage = () => {
                         <div className="w-8 h-8 rounded-full bg-primary/30 flex items-center justify-center text-xs">{s.name.split(' ').map((x) => x[0]).join('').slice(0, 2)}</div>
                         <div className="min-w-0">
                           <p className="text-sm truncate">{s.name}</p>
-                          <p className="text-xs text-muted">{s.roll} · 09:{10 + s.id} AM</p>
+                          <p className="text-xs text-muted">{s.roll_number} · Real-time</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge tone={s.id % 5 === 0 ? 'danger' : 'success'}>{s.id % 5 === 0 ? 'Absent' : 'Present'}</Badge>
+                        <Badge tone={statusByStudent.get(s.student_id) === 'present' ? 'success' : 'danger'}>{statusByStudent.get(s.student_id) === 'present' ? 'Present' : 'Absent'}</Badge>
                         <Button variant="outline" className="px-2 py-1 text-xs">Manual</Button>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="text-xs text-muted border-t border-border pt-2">Present: {presentCount} | Absent: {students.length - presentCount} | Unknown: 1</div>
+                <div className="text-xs text-muted border-t border-border pt-2">Present: {presentCount} | Absent: {Math.max(0, students.length - presentCount)} | Unknown: 0</div>
               </CardBody>
             </Card>
           </div>

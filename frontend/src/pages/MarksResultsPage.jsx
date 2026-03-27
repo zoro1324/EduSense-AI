@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
-import { quarterlyMarks } from '../data/appData';
 import { Badge, Button, Card, CardBody, CardHeader, Input, PageContainer, PageTitle, Select, TextArea } from '../components/ui/UIPrimitives';
 import { Modal } from '../components/ui/Modal';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { api } from '../lib/api';
 
 const gradeOf = (t) => (t >= 90 ? 'A+' : t >= 80 ? 'A' : t >= 70 ? 'B+' : t >= 60 ? 'B' : t >= 50 ? 'C' : 'D');
 
@@ -14,15 +14,60 @@ export const MarksResultsPage = () => {
   const [exam, setExam] = useState('Quarterly');
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [resultRows, setResultRows] = useState([]);
+  const [examList, setExamList] = useState([]);
 
-  const rows = useMemo(() => quarterlyMarks.filter((m) => m.className === className), [className]);
-  const resultRows = rows.map((r) => {
-    const total = r.tamil + r.english + r.maths + r.science + r.social;
-    const avg = Math.round(total / 5);
-    return { ...r, total, grade: gradeOf(avg) };
-  }).sort((a, b) => b.total - a.total).map((r, i) => ({ ...r, rank: i + 1 }));
+  const loadData = async () => {
+    try {
+      const [resultsData, examsData] = await Promise.all([
+        api.get('/marks/results/'),
+        api.get('/marks/exams/'),
+      ]);
+      setResultRows(Array.isArray(resultsData) ? resultsData : []);
+      const exams = Array.isArray(examsData) ? examsData : [];
+      setExamList(exams);
+      if (exams.length) {
+        setExam(exams[0].name);
+      }
+    } catch (error) {
+      setResultRows([]);
+      setExamList([]);
+    }
+  };
 
-  const subjectAvg = ['tamil', 'english', 'maths', 'science', 'social'].map((s) => ({ subject: s, avg: Math.round(resultRows.reduce((acc, r) => acc + r[s], 0) / resultRows.length) }));
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const filteredResults = useMemo(
+    () =>
+      resultRows
+        .filter((m) => !className || m.student_name)
+        .filter((m) => !exam || m.exam_name === exam),
+    [resultRows, className, exam]
+  );
+
+  const subjectAvg = [
+    { subject: 'Average %', avg: filteredResults.length ? Math.round(filteredResults.reduce((acc, r) => acc + Number(r.percentage || 0), 0) / filteredResults.length) : 0 },
+  ];
+
+  const generateReport = async (id) => {
+    try {
+      await api.post(`/marks/results/${id}/generate-report/`, {});
+      await loadData();
+    } catch (error) {
+      // noop
+    }
+  };
+
+  const sendReport = async (id) => {
+    try {
+      await api.post(`/marks/results/${id}/send-report/`, {});
+      await loadData();
+    } catch (error) {
+      // noop
+    }
+  };
 
   return (
     <AppShell>
@@ -33,9 +78,9 @@ export const MarksResultsPage = () => {
         {tab === 'Add Marks' ? (
           <Card>
             <CardBody className="space-y-3">
-              <div className="grid md:grid-cols-2 gap-2"><Select value={className} onChange={(e) => setClassName(e.target.value)}><option>10A</option><option>11A</option><option>12A</option></Select><Select value={exam} onChange={(e) => setExam(e.target.value)}><option>Unit Test 1</option><option>Unit Test 2</option><option>Quarterly</option><option>Half Yearly</option><option>Annual</option></Select></div>
+              <div className="grid md:grid-cols-2 gap-2"><Select value={className} onChange={(e) => setClassName(e.target.value)}><option>10A</option><option>11A</option><option>12A</option></Select><Select value={exam} onChange={(e) => setExam(e.target.value)}>{examList.map((x) => <option key={x.id}>{x.name}</option>)}</Select></div>
               <div className="overflow-auto thin-scrollbar"><table className="w-full min-w-[1000px] text-sm"><thead className="text-left text-muted"><tr><th>Student</th><th>Tamil</th><th>English</th><th>Maths</th><th>Science</th><th>Social</th><th>Total</th><th>Grade</th></tr></thead><tbody>
-                {resultRows.map((r) => <tr key={r.id} className="border-t border-border hover:bg-slate-800/60"><td className="py-2">{r.student}</td><td>{r.tamil}</td><td>{r.english}</td><td className={r.maths > 100 ? 'text-red-400' : ''}>{r.maths}</td><td>{r.science}</td><td>{r.social}</td><td>{r.total}</td><td>{r.grade}</td></tr>)}
+                {filteredResults.map((r) => <tr key={r.id} className="border-t border-border hover:bg-slate-800/60"><td className="py-2">{r.student_name}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>{r.total_marks}</td><td>{r.grade || gradeOf(r.percentage || 0)}</td></tr>)}
               </tbody></table></div>
               <Button variant="outline">Upload CSV</Button>
               <Button className="w-full" loading={saving} onClick={() => { setSaving(true); setTimeout(() => setSaving(false), 1000); }}>Save Marks</Button>
@@ -48,7 +93,7 @@ export const MarksResultsPage = () => {
             <CardHeader title="Results" />
             <CardBody className="space-y-4">
               <table className="w-full text-sm"><thead className="text-left text-muted"><tr><th>Rank</th><th>Student</th><th>Total</th><th>Grade</th></tr></thead><tbody>
-                {resultRows.map((r) => <tr key={r.id} className="border-t border-border"><td className="py-2">{r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : r.rank}</td><td>{r.student}</td><td>{r.total}</td><td>{r.grade}</td></tr>)}
+                {filteredResults.map((r, idx) => <tr key={r.id} className="border-t border-border"><td className="py-2">{(r.rank || idx + 1) === 1 ? '🥇' : (r.rank || idx + 1) === 2 ? '🥈' : (r.rank || idx + 1) === 3 ? '🥉' : (r.rank || idx + 1)}</td><td>{r.student_name}</td><td>{r.total_marks}</td><td>{r.grade}</td></tr>)}
                 <tr className="border-t border-border text-muted"><td colSpan={4}>Subject-wise averages shown in chart below</td></tr>
               </tbody></table>
               <ResponsiveContainer width="100%" height={260}><BarChart data={subjectAvg}><XAxis dataKey="subject" stroke="#94a3b8" /><YAxis stroke="#94a3b8" /><Tooltip /><Bar dataKey="avg" fill="#6366f1" /></BarChart></ResponsiveContainer>
@@ -62,7 +107,7 @@ export const MarksResultsPage = () => {
             <CardHeader title="AI Reports" right={<Button>Generate All Reports</Button>} />
             <CardBody className="space-y-3">
               <table className="w-full text-sm"><thead className="text-left text-muted"><tr><th>Student</th><th>Exam</th><th>Status</th><th>Preview</th><th>Action</th></tr></thead><tbody>
-                {resultRows.slice(0, 8).map((r, i) => <tr key={r.id} className="border-t border-border"><td className="py-2">{r.student}</td><td>{exam}</td><td>{i % 3 === 0 ? '⏳ Pending' : '✅ Generated'}</td><td>{i % 3 === 0 ? '—' : <button onClick={() => setPreview(r)} className="text-indigo-300">👁️</button>}</td><td>{i % 3 === 0 ? <Button variant="outline" className="text-xs">Generate</Button> : <Button variant="success" className="text-xs">Send</Button>}</td></tr>)}
+                {filteredResults.slice(0, 8).map((r) => <tr key={r.id} className="border-t border-border"><td className="py-2">{r.student_name}</td><td>{r.exam_name}</td><td>{r.ai_report ? '✅ Generated' : '⏳ Pending'}</td><td>{r.ai_report ? <button onClick={() => setPreview(r)} className="text-indigo-300">👁️</button> : '—'}</td><td>{!r.ai_report ? <Button variant="outline" className="text-xs" onClick={() => generateReport(r.id)}>Generate</Button> : <Button variant="success" className="text-xs" onClick={() => sendReport(r.id)}>Send</Button>}</td></tr>)}
               </tbody></table>
               <div className="w-full h-2 rounded bg-slate-700"><div className="h-2 rounded bg-primary" style={{ width: '46%' }} /></div>
               <div className="text-xs text-muted">Generating report for Meena S...</div>
@@ -74,9 +119,9 @@ export const MarksResultsPage = () => {
         <Modal isOpen={Boolean(preview)} onClose={() => setPreview(null)} title="Report Preview" width="max-w-3xl">
           {preview ? (
             <div className="space-y-3">
-              <h4 className="font-semibold">{preview.student} — {exam}</h4>
-              <div className="p-3 rounded-lg border border-border bg-slate-900 text-sm text-muted">{preview.student} has shown consistent progress in language subjects, with stronger performance in Maths and Science. Recommend focused revision on Social and more practice tests before finals.</div>
-              <TextArea rows={5} defaultValue="Editable report text..." />
+              <h4 className="font-semibold">{preview.student_name} — {preview.exam_name}</h4>
+              <div className="p-3 rounded-lg border border-border bg-slate-900 text-sm text-muted">{preview.ai_report || 'Report not generated yet.'}</div>
+              <TextArea rows={5} defaultValue={preview.ai_report || ''} />
               <div className="flex items-center gap-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" defaultChecked /> Send via WhatsApp</label><label className="flex items-center gap-2"><input type="checkbox" /> Send via SMS</label></div>
               <Button variant="success">Send Report</Button>
             </div>

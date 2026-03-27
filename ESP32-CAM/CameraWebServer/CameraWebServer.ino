@@ -2,13 +2,23 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 
+void startCameraServer();
+
 const char* ssid = "zoro";
 const char* password = "1234567890";
 
-String serverURL = "http://YOUR_DJANGO_SERVER_URL/upload-image/";
+const char* serverURL = "http://10.21.247.170:8000/api/attendance/camera-mark/?period=1";
+const char* deviceToken = "YOUR_DEVICE_TOKEN";
 
 #define TRIG_PIN 14
 #define ECHO_PIN 15
+
+const long DETECTION_DISTANCE_CM = 25;
+const int REQUIRED_CONSECUTIVE_DETECTIONS = 2;
+const unsigned long CAPTURE_COOLDOWN_MS = 5000;
+
+unsigned long lastCaptureAtMs = 0;
+int consecutiveDetections = 0;
 
 // AI Thinker Camera Pins
 #define PWDN_GPIO_NUM     32
@@ -42,14 +52,38 @@ long getDistance() {
 }
 
 void sendImage(camera_fb_t * fb) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected. Skipping upload.");
+    return;
+  }
+
   HTTPClient http;
   http.begin(serverURL);
+  http.setTimeout(15000);
   http.addHeader("Content-Type", "image/jpeg");
+  if (strlen(deviceToken) > 0) {
+    http.addHeader("X-Device-Token", deviceToken);
+  }
 
   int httpResponseCode = http.POST(fb->buf, fb->len);
-  
+  String responseBody = http.getString();
+
+  Serial.print("HTTP status: ");
   Serial.println(httpResponseCode);
+  if (responseBody.length() > 0) {
+    Serial.println("Server response:");
+    Serial.println(responseBody);
+  }
   http.end();
+}
+
+camera_fb_t* captureStableFrame() {
+  camera_fb_t *warmup = esp_camera_fb_get();
+  if (warmup) {
+    esp_camera_fb_return(warmup);
+  }
+  delay(120);
+  return esp_camera_fb_get();
 }
 
 void setup() {
@@ -88,26 +122,57 @@ void setup() {
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
 
-  config.frame_size = FRAMESIZE_VGA;
-  config.jpeg_quality = 10;
-  config.fb_count = 1;
+  if (psramFound()) {
+    config.frame_size = FRAMESIZE_VGA;
+    config.jpeg_quality = 10;
+    config.fb_count = 2;
+  } else {
+    config.frame_size = FRAMESIZE_QVGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
+  }
 
   if (esp_camera_init(&config) != ESP_OK) {
     Serial.println("Camera Init Failed!");
     return;
   }
-  Serial.println("Camera Ready");
+
+  sensor_t *sensor = esp_camera_sensor_get();
+  if (sensor) {
+    sensor->set_brightness(sensor, 1);
+    sensor->set_contrast(sensor, 1);
+    sensor->set_saturation(sensor, 0);
+  }
+
+  startCameraServer();
+  Serial.println("Camera stream server started");
+  Serial.print("Open stream: http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("/stream");
+  Serial.print("Open controls: http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("/");
 }
 
 void loop() {
   long dist = getDistance();
-  Serial.print("Distance: ");
-  Serial.println(dist);
+//  Serial.print("Distance: ");
+//  Serial.println(dist);
 
-  if (dist > 0 && dist < 25) {  
-    Serial.println("Movement detected! Capturing...");
+  bool detected = dist > 0 && dist <= DETECTION_DISTANCE_CM;
+  if (detected) {
+    consecutiveDetections++;
+  } else {
+    consecutiveDetections = 0;
+  }
 
-    camera_fb_t *fb = esp_camera_fb_get();
+  unsigned long now = millis();
+  bool cooldownComplete = (now - lastCaptureAtMs) >= CAPTURE_COOLDOWN_MS;
+
+  if (detected && cooldownComplete && consecutiveDetections >= REQUIRED_CONSECUTIVE_DETECTIONS) {
+    Serial.println("Presence detected. Capturing image...");
+
+    camera_fb_t *fb = captureStableFrame();
     if (!fb) {
       Serial.println("Camera capture failed");
       return;
@@ -116,8 +181,10 @@ void loop() {
     sendImage(fb);
     esp_camera_fb_return(fb);
 
-    delay(3000); // avoid spam
+    lastCaptureAtMs = now;
+    consecutiveDetections = 0;
+    delay(200);
   }
 
-  delay(200);
+  delay(150);
 }

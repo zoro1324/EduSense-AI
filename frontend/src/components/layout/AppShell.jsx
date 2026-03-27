@@ -6,6 +6,7 @@ import { currentDateTime } from '../../data/appData';
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: '▦' },
+  { label: 'Academic Planner', path: '/academic', icon: '⌘' },
   { label: 'Live Attendance', path: '/attendance/live', icon: '📷' },
   { label: 'Attendance Records', path: '/attendance/records', icon: '📅' },
   { label: 'Engagement Monitor', path: '/engagement', icon: '📈' },
@@ -21,6 +22,7 @@ const navItems = [
 
 const pageMap = {
   '/dashboard': 'Dashboard',
+  '/academic': 'Academic Planner',
   '/attendance/live': 'Live Attendance',
   '/attendance/records': 'Attendance Records',
   '/engagement': 'Engagement Monitor',
@@ -35,7 +37,7 @@ const pageMap = {
 };
 
 export const AppShell = ({ children }) => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isPrincipal, managedClasses, userDisplayName } = useAuth();
   const location = useLocation();
   const [now, setNow] = useState(currentDateTime());
   const [collapsed, setCollapsed] = useState(false);
@@ -45,7 +47,12 @@ export const AppShell = ({ children }) => {
     return () => clearInterval(id);
   }, []);
 
-  const nav = useMemo(() => navItems.filter((n) => !n.adminOnly || isAdmin), [isAdmin]);
+  const nav = useMemo(() => navItems.filter((n) => !n.adminOnly || isPrincipal), [isPrincipal]);
+  const scopeLabel = isPrincipal
+    ? 'All Classes'
+    : managedClasses.length
+      ? managedClasses.join(', ')
+      : 'No Class Assigned';
 
   return (
     <div className="h-screen bg-bg text-text flex">
@@ -79,10 +86,11 @@ export const AppShell = ({ children }) => {
 
         <div className="p-3 border-t border-border">
           <div className="bg-slate-800 rounded-lg px-3 py-2 flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-primary/40 flex items-center justify-center">{(user?.name || 'U')[0]}</div>
+            <div className="w-8 h-8 rounded-full bg-primary/40 flex items-center justify-center">{userDisplayName[0]}</div>
             <div className={`${collapsed ? 'md:hidden' : ''}`}>
-              <p className="text-sm font-medium truncate">{user?.name}</p>
+              <p className="text-sm font-medium truncate">{userDisplayName}</p>
               <p className="text-xs text-muted">{user?.email}</p>
+              <p className="text-[11px] text-muted truncate">Scope: {scopeLabel}</p>
             </div>
           </div>
           <button onClick={logout} className={`w-full px-3 py-2 rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/30 text-sm ${collapsed ? 'md:px-0' : ''}`}>
@@ -100,10 +108,13 @@ export const AppShell = ({ children }) => {
           <div className="flex items-center gap-3">
             <button className="relative w-9 h-9 rounded-lg bg-slate-800 border border-border">🔔<span className="absolute -top-1 -right-1 text-[10px] bg-danger text-white rounded-full px-1">4</span></button>
             <div className="flex items-center gap-2 bg-slate-800 border border-border rounded-lg px-2 py-1">
-              <div className="w-8 h-8 rounded-full bg-indigo-500/30 flex items-center justify-center">{(user?.name || 'U')[0]}</div>
+              <div className="w-8 h-8 rounded-full bg-indigo-500/30 flex items-center justify-center">{userDisplayName[0]}</div>
               <div className="hidden sm:block">
-                <p className="text-sm">{user?.name}</p>
-                <Badge tone={isAdmin ? 'primary' : 'info'}>{user?.role}</Badge>
+                <p className="text-sm">{userDisplayName}</p>
+                <div className="flex items-center gap-2">
+                  <Badge tone={isPrincipal ? 'primary' : 'info'}>{user?.role}</Badge>
+                  <Badge tone="warning">{isPrincipal ? 'All Classes' : `${managedClasses.length} class(es)`}</Badge>
+                </div>
               </div>
             </div>
           </div>

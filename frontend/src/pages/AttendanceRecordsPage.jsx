@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
-import { attendanceRows } from '../data/appData';
 import { Badge, Button, Card, CardBody, CardHeader, Input, PageContainer, PageTitle, Select } from '../components/ui/UIPrimitives';
 import { TableWrapper } from '../components/ui/Table';
+import { api } from '../lib/api';
 
 const pct = (row) => {
   const present = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'].filter((k) => row[k]).length;
@@ -10,10 +10,48 @@ const pct = (row) => {
 };
 
 export const AttendanceRecordsPage = () => {
+  const [records, setRecords] = useState([]);
   const [query, setQuery] = useState('');
   const [className, setClassName] = useState('All');
   const [period, setPeriod] = useState('All');
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await api.get('/attendance/');
+        setRecords(Array.isArray(data) ? data : []);
+      } catch (error) {
+        setRecords([]);
+      }
+    };
+    load();
+  }, []);
+
+  const attendanceRows = useMemo(() => {
+    const grouped = new Map();
+    records.forEach((row) => {
+      const key = `${row.student}-${row.date}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          id: key,
+          studentId: row.student,
+          name: row.student_name,
+          roll: String(row.student),
+          className: 'N/A',
+          p1: false,
+          p2: false,
+          p3: false,
+          p4: false,
+          p5: false,
+          p6: false,
+        });
+      }
+      const item = grouped.get(key);
+      item[`p${row.period}`] = row.status === 'present';
+    });
+    return Array.from(grouped.values());
+  }, [records]);
 
   const filtered = useMemo(() => {
     return attendanceRows.filter((r) => {
@@ -22,7 +60,7 @@ export const AttendanceRecordsPage = () => {
       const byPeriod = period === 'All' || r[`p${period}`] !== undefined;
       return byQ && byClass && byPeriod;
     });
-  }, [query, className, period]);
+  }, [attendanceRows, query, className, period]);
 
   const start = (page - 1) * 10;
   const rows = filtered.slice(start, start + 10);

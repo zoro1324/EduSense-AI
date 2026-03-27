@@ -1,6 +1,15 @@
 from django.urls import path
 
+from api.views.academic import (
+    FacultyDetailView,
+    FacultyListCreateView,
+    SchoolClassDetailView,
+    SchoolClassListCreateView,
+    TimetableDetailView,
+    TimetableListCreateView,
+)
 from api.views.attendance import (
+    AttendanceCameraMarkView,
     AttendanceDailyView,
     AttendanceDetailUpdateView,
     AttendanceListView,
@@ -81,6 +90,13 @@ urlpatterns = [
     path("users/", UserListCreateView.as_view()),
     path("users/<int:pk>/", UserDetailView.as_view()),
 
+    path("academic/classes/", SchoolClassListCreateView.as_view()),
+    path("academic/classes/<int:pk>/", SchoolClassDetailView.as_view()),
+    path("academic/faculties/", FacultyListCreateView.as_view()),
+    path("academic/faculties/<int:pk>/", FacultyDetailView.as_view()),
+    path("academic/timetable/", TimetableListCreateView.as_view()),
+    path("academic/timetable/<int:pk>/", TimetableDetailView.as_view()),
+
     path("students/", StudentListCreateView.as_view()),
     path("students/classes/", StudentClassesView.as_view()),
     path("students/<int:pk>/", StudentDetailView.as_view()),
@@ -89,6 +105,7 @@ urlpatterns = [
     path("students/bulk-upload/", StudentBulkUploadView.as_view()),
 
     path("attendance/mark/", AttendanceMarkView.as_view()),
+    path("attendance/camera-mark/", AttendanceCameraMarkView.as_view()),
     path("attendance/mark-bulk/", AttendanceMarkBulkView.as_view()),
     path("attendance/", AttendanceListView.as_view()),
     path("attendance/today/", AttendanceTodayView.as_view()),

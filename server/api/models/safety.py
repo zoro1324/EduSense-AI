@@ -33,6 +33,7 @@ class SafetyAlert(models.Model):
 
     alert_type = models.CharField(max_length=20, choices=ALERT_TYPE_CHOICES)
     threat_level = models.CharField(max_length=20, choices=THREAT_LEVEL_CHOICES)
+    class_name = models.CharField(max_length=50, default="General")
     location = models.CharField(max_length=255)
     timestamp = models.DateTimeField(auto_now_add=True)
     snapshot = models.ImageField(upload_to="safety/snapshots/", blank=True, null=True)

@@ -3,11 +3,13 @@ from django.db import models
 
 
 class CustomUser(AbstractUser):
+    ROLE_PRINCIPAL = "principal"
     ROLE_ADMIN = "admin"
     ROLE_TEACHER = "teacher"
     ROLE_STAFF = "staff"
 
     ROLE_CHOICES = [
+        (ROLE_PRINCIPAL, "Principal"),
         (ROLE_ADMIN, "Admin"),
         (ROLE_TEACHER, "Teacher"),
         (ROLE_STAFF, "Staff"),

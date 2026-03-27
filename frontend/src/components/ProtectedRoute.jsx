@@ -3,13 +3,13 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const ProtectedRoute = ({ children, adminOnly = false }) => {
-  const { isLoggedIn, isAdmin } = useAuth();
+  const { isLoggedIn, isPrincipal } = useAuth();
 
   if (!isLoggedIn) {
     return <Navigate to="/" replace />;
   }
 
-  if (adminOnly && !isAdmin) {
+  if (adminOnly && !isPrincipal) {
     return <Navigate to="/dashboard" replace />;
   }
 

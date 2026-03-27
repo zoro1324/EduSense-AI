@@ -154,8 +154,64 @@ TWILIO_SMS_FROM = config('TWILIO_SMS_FROM', default='')
 GROQ_API_KEY = config('GROQ_API_KEY', default='')
 ADMIN_PHONE = config('ADMIN_PHONE', default='')
 SCHOOL_NAME = config('SCHOOL_NAME', default='Your School Name')
+ESP32_DEVICE_TOKEN = config('ESP32_DEVICE_TOKEN', default='')
+ESP32_FACE_MATCH_THRESHOLD = config('ESP32_FACE_MATCH_THRESHOLD', cast=float, default=0.6)
+ESP32_DEFAULT_PERIOD = config('ESP32_DEFAULT_PERIOD', cast=int, default=1)
+
+ENGAGEMENT_MONITOR_AUTOSTART = config('ENGAGEMENT_MONITOR_AUTOSTART', cast=bool, default=True)
+ENGAGEMENT_MONITOR_ENABLED = config('ENGAGEMENT_MONITOR_ENABLED', cast=bool, default=True)
+ENGAGEMENT_CAMERA_SOURCE = config('ENGAGEMENT_CAMERA_SOURCE', default='')
+ENGAGEMENT_WEBCAM_INDEX = config('ENGAGEMENT_WEBCAM_INDEX', cast=int, default=0)
+ENGAGEMENT_WEBCAM_FALLBACK = config('ENGAGEMENT_WEBCAM_FALLBACK', cast=bool, default=True)
+ENGAGEMENT_MODEL_PATH = config(
+    'ENGAGEMENT_MODEL_PATH',
+    default=str((BASE_DIR.parent / 'models' / 'engagements' / 'yolov8n-pose.pt').resolve()),
+)
+ENGAGEMENT_CONF_THRESHOLD = config('ENGAGEMENT_CONF_THRESHOLD', cast=float, default=0.3)
+ENGAGEMENT_IMAGE_SIZE = config('ENGAGEMENT_IMAGE_SIZE', cast=int, default=640)
+ENGAGEMENT_LOG_INTERVAL_SECONDS = config('ENGAGEMENT_LOG_INTERVAL_SECONDS', cast=int, default=10)
+ENGAGEMENT_RECONNECT_DELAY_SECONDS = config('ENGAGEMENT_RECONNECT_DELAY_SECONDS', cast=float, default=2.0)
+ENGAGEMENT_MAX_FPS = config('ENGAGEMENT_MAX_FPS', cast=int, default=0)
+ENGAGEMENT_SHOW_WINDOW = config('ENGAGEMENT_SHOW_WINDOW', cast=bool, default=False)
+ENGAGEMENT_WINDOW_TITLE = config('ENGAGEMENT_WINDOW_TITLE', default='Classroom Engagement Monitor')
+ENGAGEMENT_CLASS_NAME = config('ENGAGEMENT_CLASS_NAME', default='Classroom A')
+ENGAGEMENT_PERIOD = config('ENGAGEMENT_PERIOD', cast=int, default=1)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{levelname}] {asctime} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'DEBUG' if DEBUG else 'INFO',
+    },
+    'loggers': {
+        'api': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

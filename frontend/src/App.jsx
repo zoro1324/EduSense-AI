@@ -6,6 +6,7 @@ import { ToastProvider } from './components/ui/ToastContext';
 
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { AcademicPlannerPage } from './pages/AcademicPlannerPage';
 import { LiveAttendancePage } from './pages/LiveAttendancePage';
 import { AttendanceRecordsPage } from './pages/AttendanceRecordsPage';
 import { EngagementMonitorPage } from './pages/EngagementMonitorPage';
@@ -28,6 +29,7 @@ function App() {
           <Routes>
             <Route path="/" element={<LoginPage />} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+            <Route path="/academic" element={<ProtectedRoute><AcademicPlannerPage /></ProtectedRoute>} />
             <Route path="/attendance/live" element={<ProtectedRoute><LiveAttendancePage /></ProtectedRoute>} />
             <Route path="/attendance/records" element={<ProtectedRoute><AttendanceRecordsPage /></ProtectedRoute>} />
             <Route path="/engagement" element={<ProtectedRoute><EngagementMonitorPage /></ProtectedRoute>} />
