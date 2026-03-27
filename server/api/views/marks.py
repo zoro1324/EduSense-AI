@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.views import APIView
 
+from api.access_control import scope_queryset_to_user_classes, user_can_access_class
 from api.models import ExamType, Student, StudentMark, StudentResult, Subject
 from api.serializers import (
     ExamTypeSerializer,
@@ -23,7 +24,7 @@ from api.views import error_response, success_response
 class ExamListCreateView(APIView):
     def get(self, request):
         try:
-            exams = ExamType.objects.all().order_by("-date")
+            exams = scope_queryset_to_user_classes(ExamType.objects.all(), request.user, "class_name").order_by("-date")
             return success_response(ExamTypeSerializer(exams, many=True).data)
         except Exception as exc:
             return error_response(exc, status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -32,6 +33,9 @@ class ExamListCreateView(APIView):
         try:
             serializer = ExamTypeSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
+            class_name = serializer.validated_data["class_name"]
+            if not user_can_access_class(request.user, class_name):
+                return error_response("You can only create exams for your in-charge class", status.HTTP_403_FORBIDDEN)
             exam = serializer.save()
             return success_response(ExamTypeSerializer(exam).data, status.HTTP_201_CREATED)
         except Exception as exc:
@@ -41,7 +45,9 @@ class ExamListCreateView(APIView):
 class SubjectListCreateView(APIView):
     def get(self, request):
         try:
-            subjects = Subject.objects.all().order_by("class_name", "name")
+            subjects = scope_queryset_to_user_classes(Subject.objects.all(), request.user, "class_name").order_by(
+                "class_name", "name"
+            )
             return success_response(SubjectSerializer(subjects, many=True).data)
         except Exception as exc:
             return error_response(exc, status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -50,6 +56,9 @@ class SubjectListCreateView(APIView):
         try:
             serializer = SubjectSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
+            class_name = serializer.validated_data["class_name"]
+            if not user_can_access_class(request.user, class_name):
+                return error_response("You can only create subjects for your in-charge class", status.HTTP_403_FORBIDDEN)
             subject = serializer.save()
             return success_response(SubjectSerializer(subject).data, status.HTTP_201_CREATED)
         except Exception as exc:
@@ -61,6 +70,15 @@ class MarkAddView(APIView):
         try:
             serializer = StudentMarkSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
+            student = serializer.validated_data["student"]
+            subject = serializer.validated_data["subject"]
+            exam_type = serializer.validated_data["exam_type"]
+
+            if student.class_name != subject.class_name or student.class_name != exam_type.class_name:
+                return error_response("Student, subject, and exam must belong to the same class")
+            if not user_can_access_class(request.user, student.class_name):
+                return error_response("You can only add marks for your in-charge class", status.HTTP_403_FORBIDDEN)
+
             serializer.save()
             mark = serializer.instance
             if not isinstance(mark, StudentMark):
@@ -89,6 +107,14 @@ class MarkBulkUploadView(APIView):
                 student = Student.objects.get(student_id=row["student_id"])
                 exam = ExamType.objects.get(id=row["exam_type_id"])
                 subject = Subject.objects.get(id=row["subject_id"])
+
+                if student.class_name != subject.class_name or student.class_name != exam.class_name:
+                    return error_response(
+                        f"Class mismatch for student {student.student_id}: student={student.class_name}, exam={exam.class_name}, subject={subject.class_name}"
+                    )
+                if not user_can_access_class(request.user, student.class_name):
+                    return error_response("You can only upload marks for your in-charge class", status.HTTP_403_FORBIDDEN)
+
                 mark, was_created = StudentMark.objects.update_or_create(
                     student=student,
                     exam_type=exam,
@@ -111,7 +137,11 @@ class MarkBulkUploadView(APIView):
 class MarkListView(APIView):
     def get(self, request):
         try:
-            marks = StudentMark.objects.select_related("student", "subject", "exam_type").all().order_by("student", "subject")
+            marks = scope_queryset_to_user_classes(
+                StudentMark.objects.select_related("student", "subject", "exam_type").all(),
+                request.user,
+                "student__class_name",
+            ).order_by("student", "subject")
             return success_response(StudentMarkSerializer(marks, many=True).data)
         except Exception as exc:
             return error_response(exc, status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -120,7 +150,11 @@ class MarkListView(APIView):
 class ResultListView(APIView):
     def get(self, request):
         try:
-            results = StudentResult.objects.select_related("student", "exam_type").all().order_by("-exam_type__date", "student")
+            results = scope_queryset_to_user_classes(
+                StudentResult.objects.select_related("student", "exam_type").all(),
+                request.user,
+                "student__class_name",
+            ).order_by("-exam_type__date", "student")
             return success_response(StudentResultSerializer(results, many=True).data)
         except Exception as exc:
             return error_response(exc, status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -130,6 +164,8 @@ class ResultGenerateReportView(APIView):
     def post(self, request, pk):
         try:
             result = StudentResult.objects.select_related("student", "exam_type").get(pk=pk)
+            if not user_can_access_class(request.user, result.student.class_name):
+                return error_response("You can only generate reports for your in-charge class", status.HTTP_403_FORBIDDEN)
             report = AIReportService(settings.GROQ_API_KEY).generate_report(result)
             if report:
                 result.ai_report = report
@@ -147,7 +183,12 @@ class ResultGenerateAllReportsView(APIView):
         try:
             generated = 0
             service = AIReportService(settings.GROQ_API_KEY)
-            for result in StudentResult.objects.select_related("student", "exam_type").all():
+            queryset = scope_queryset_to_user_classes(
+                StudentResult.objects.select_related("student", "exam_type").all(),
+                request.user,
+                "student__class_name",
+            )
+            for result in queryset:
                 report = service.generate_report(result)
                 if report:
                     result.ai_report = report
@@ -163,6 +204,8 @@ class ResultSendReportView(APIView):
     def post(self, request, pk):
         try:
             result = StudentResult.objects.select_related("student").get(pk=pk)
+            if not user_can_access_class(request.user, result.student.class_name):
+                return error_response("You can only send reports for your in-charge class", status.HTTP_403_FORBIDDEN)
             sent = NotificationService().send_result_report(result)
             if sent:
                 result.report_sent = True
@@ -180,7 +223,12 @@ class ResultSendAllReportsView(APIView):
         try:
             sent_count = 0
             service = NotificationService()
-            for result in StudentResult.objects.select_related("student").all():
+            queryset = scope_queryset_to_user_classes(
+                StudentResult.objects.select_related("student").all(),
+                request.user,
+                "student__class_name",
+            )
+            for result in queryset:
                 sent = service.send_result_report(result)
                 if sent:
                     result.report_sent = True
@@ -199,6 +247,8 @@ class RecomputeResultsView(APIView):
             if not exam_id:
                 return error_response("exam_type_id is required")
             exam = ExamType.objects.get(id=exam_id)
+            if not user_can_access_class(request.user, exam.class_name):
+                return error_response("You can only recompute results for your in-charge class", status.HTTP_403_FORBIDDEN)
             student_totals = (
                 StudentMark.objects.filter(exam_type=exam)
                 .values("student")
