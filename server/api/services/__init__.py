@@ -2,3 +2,4 @@ from .ai_report_service import AIReportService
 from .face_recognition_service import FaceRecognitionService
 from .face_registration_service import FaceRegistrationService
 from .notification_service import NotificationService
+from .timetable_service import get_active_timetable_entry, resolve_current_period_for_class
