@@ -3,11 +3,14 @@ import { AppShell } from '../components/layout/AppShell';
 import { Badge, Card, CardBody, CardHeader, PageContainer, PageTitle, Select } from '../components/ui/UIPrimitives';
 import { BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../lib/api';
+import { API_BASE_URL, api } from '../lib/api';
+
+const MONITORED_CLASS = '10A';
 
 export const EngagementMonitorPage = () => {
   const { managedClasses, isPrincipal } = useAuth();
   const [logs, setLogs] = useState([]);
+  const [allClassLogs, setAllClassLogs] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [selectedClass, setSelectedClass] = useState('');
 
@@ -35,17 +38,23 @@ export const EngagementMonitorPage = () => {
     const load = async () => {
       if (!isPrincipal && managedClasses.length === 0) {
         setLogs([]);
+        setAllClassLogs([]);
         setLastUpdated(new Date());
         return;
       }
 
       try {
         const query = selectedClass ? `?class_name=${encodeURIComponent(selectedClass)}` : '';
-        const data = await api.get(`/engagement/today/${query}`);
-        setLogs(Array.isArray(data) ? data : []);
+        const [classData, allData] = await Promise.all([
+          api.get(`/engagement/today/${query}`),
+          api.get('/engagement/today/'),
+        ]);
+        setLogs(Array.isArray(classData) ? classData : []);
+        setAllClassLogs(Array.isArray(allData) ? allData : []);
         setLastUpdated(new Date());
       } catch (error) {
         setLogs([]);
+        setAllClassLogs([]);
       }
     };
 
@@ -77,6 +86,52 @@ export const EngagementMonitorPage = () => {
 
   const statusTone = useMemo(() => (status === 'High' ? 'success' : status === 'Medium' ? 'warning' : 'danger'), [status]);
   const lastUpdatedLabel = lastUpdated ? lastUpdated.toLocaleTimeString() : 'Waiting for data';
+  const isLiveSnapshotPath = (pathValue) => String(pathValue || '').startsWith('engagement/snapshots/');
+
+  const latestLiveLogForSelectedClass = useMemo(() => {
+    for (let i = logs.length - 1; i >= 0; i -= 1) {
+      if (isLiveSnapshotPath(logs[i]?.snapshot_path)) {
+        return logs[i];
+      }
+    }
+    return null;
+  }, [logs]);
+
+  const latestLiveLogAnyClass = useMemo(() => {
+    for (let i = allClassLogs.length - 1; i >= 0; i -= 1) {
+      if (isLiveSnapshotPath(allClassLogs[i]?.snapshot_path)) {
+        return allClassLogs[i];
+      }
+    }
+    return null;
+  }, [allClassLogs]);
+
+  const backendOrigin = useMemo(() => {
+    try {
+      const parsed = new URL(API_BASE_URL);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch (error) {
+      return '';
+    }
+  }, []);
+
+  const showMonitorFeed = selectedClass === MONITORED_CLASS;
+  const feedLog = showMonitorFeed
+    ? (latestLiveLogForSelectedClass || latestLiveLogAnyClass)
+    : latestLiveLogForSelectedClass;
+  const feedIsFallbackClass = Boolean(showMonitorFeed && latestLiveLogAnyClass && !latestLiveLogForSelectedClass);
+
+  const snapshotUrl = useMemo(() => {
+    const path = String(feedLog?.snapshot_path || '').replace(/^\/+/, '');
+    if (!path || !backendOrigin) {
+      return '';
+    }
+    return `${backendOrigin}/media/${path}`;
+  }, [backendOrigin, feedLog]);
+
+  const classroomFeedUrl = showMonitorFeed && snapshotUrl
+    ? `${snapshotUrl}?t=${lastUpdated ? lastUpdated.getTime() : Date.now()}`
+    : '';
 
   return (
     <AppShell>
@@ -121,11 +176,37 @@ export const EngagementMonitorPage = () => {
           <div className="xl:col-span-7">
             <Card>
               <CardBody>
-                <div className="relative aspect-video border border-border rounded-xl bg-slate-700/40 grid place-items-center text-muted">
-                  <div className="text-center">
-                    <div className="text-5xl">📈</div>
-                    <p>Classroom Feed</p>
-                  </div>
+                <div className="relative aspect-video border border-border rounded-xl bg-slate-700/40 text-muted overflow-hidden">
+                  {classroomFeedUrl ? (
+                    <img
+                      src={classroomFeedUrl}
+                      alt={`Classroom feed ${selectedClass || ''}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center">
+                      <div className="text-center">
+                        <div className="text-5xl">📈</div>
+                        <p>Classroom Feed</p>
+                        <p className="text-xs mt-2 text-muted">Select Class {MONITORED_CLASS} to view Python monitor feed.</p>
+                      </div>
+                    </div>
+                  )}
+                  {showMonitorFeed && !classroomFeedUrl ? (
+                    <div className="absolute bottom-3 left-3 right-3 p-2 bg-yellow-500/20 border border-yellow-500/40 rounded-lg text-xs text-yellow-100">
+                      No monitor frame available for {MONITORED_CLASS} yet. Keep the Python engagement monitor running so snapshots are written.
+                    </div>
+                  ) : null}
+                  {showMonitorFeed && classroomFeedUrl && feedIsFallbackClass ? (
+                    <div className="absolute bottom-3 left-3 p-2 bg-yellow-500/20 border border-yellow-500/40 rounded-lg text-xs text-yellow-100">
+                      Feed source: {feedLog?.class_name || 'Unknown class'}. Set ENGAGEMENT_CLASS_NAME=10A in backend for strict class mapping.
+                    </div>
+                  ) : null}
+                  {showMonitorFeed && classroomFeedUrl ? (
+                    <div className="absolute bottom-3 right-3">
+                      <Badge tone="success">Python Monitor Feed · Live</Badge>
+                    </div>
+                  ) : null}
                   <div className="absolute top-3 left-3 right-3 p-2 bg-slate-900/85 border border-border rounded-lg text-xs">
                     Engaged: {engaged} | Distracted: {distracted} | Total: {engaged + distracted}
                   </div>
