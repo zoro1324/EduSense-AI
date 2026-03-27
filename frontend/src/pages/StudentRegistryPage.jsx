@@ -6,7 +6,7 @@ import { Modal } from '../components/ui/Modal';
 import { TableWrapper } from '../components/ui/Table';
 import { useToast } from '../components/ui/ToastContext';
 import { ImageUpload } from '../components/ui/ImageUpload';
-import { api } from '../lib/api';
+import { api, API_BASE_URL } from '../lib/api';
 
 export const StudentRegistryPage = () => {
   const [students, setStudents] = useState([]);
@@ -55,6 +55,23 @@ export const StudentRegistryPage = () => {
       ),
     [students, classFilter, search]
   );
+
+  const backendOrigin = useMemo(() => {
+    try {
+      const parsed = new URL(API_BASE_URL);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch (error) {
+      return '';
+    }
+  }, []);
+
+  const getPhotoUrl = (raw) => {
+    if (!raw || !backendOrigin) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith('/')) return `${backendOrigin}${raw}`;
+    if (raw.startsWith('media/')) return `${backendOrigin}/${raw}`;
+    return `${backendOrigin}/media/${raw}`;
+  };
 
   const registerFace = async (studentId, imageFile = null) => {
     if (!studentId) {
@@ -173,7 +190,7 @@ export const StudentRegistryPage = () => {
                   <td className="px-3 py-2">
                     <div className="w-8 h-8 rounded-full bg-primary/30 grid place-items-center text-xs overflow-hidden">
                       {s.photo ? (
-                        <img src={s.photo} alt={s.name} className="w-full h-full object-cover" />
+                        <img src={getPhotoUrl(s.photo)} alt={s.name} className="w-full h-full object-cover" />
                       ) : (
                         s.name.split(' ').map((x) => x[0]).join('').slice(0, 2)
                       )}
