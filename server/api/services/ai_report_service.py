@@ -1,20 +1,27 @@
-import importlib
+try:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_groq import ChatGroq
+except ImportError:
+    ChatGroq = None
 
 from api.models import StudentMark, StudentResult
 
 
 class AIReportService:
     def __init__(self, api_key):
-        try:
-            groq_module = importlib.import_module("groq")
-            Groq = getattr(groq_module, "Groq")
-            self.client = Groq(api_key=api_key)
-        except Exception:
-            self.client = None
+        self.api_key = api_key
+        if ChatGroq:
+            self.llm = ChatGroq(
+                api_key=api_key,
+                model_name="llama-3.3-70b-versatile",
+                max_tokens=500,
+            )
+        else:
+            self.llm = None
 
     def generate_report(self, student_result):
         try:
-            if not self.client:
+            if not self.llm:
                 return None
             student = student_result.student
             exam = student_result.exam_type
@@ -56,14 +63,14 @@ class AIReportService:
                 f"Improvement: {improvement:.2f}%"
             )
 
-            completion = self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                max_tokens=500,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            )
-            return completion.choices[0].message.content.strip()
-        except Exception:
+            if not self.llm:
+                return None
+
+            system_msg = SystemMessage(content=system_prompt)
+            human_msg = HumanMessage(content=user_prompt)
+
+            response = self.llm.invoke([system_msg, human_msg])
+            return response.content.strip()
+        except Exception as e:
+            print("Failed generating report:", e)
             return None

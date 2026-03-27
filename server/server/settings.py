@@ -224,5 +224,15 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'twilio.http_client': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'urllib3': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
     },
 }

@@ -14,6 +14,11 @@ export const MarksResultsPage = () => {
   const [exam, setExam] = useState('Quarterly');
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [generatingIds, setGeneratingIds] = useState([]);
+  const [generatingAll, setGeneratingAll] = useState(false);
+  const [sendingIds, setSendingIds] = useState([]);
+  const [viaWhatsApp, setViaWhatsApp] = useState(false);
+  const [viaSMS, setViaSMS] = useState(true);
   const [resultRows, setResultRows] = useState([]);
   const [marksRows, setMarksRows] = useState([]);
   const [examList, setExamList] = useState([]);
@@ -71,19 +76,37 @@ export const MarksResultsPage = () => {
 
   const generateReport = async (id) => {
     try {
+      setGeneratingIds((prev) => [...prev, id]);
       await api.post(`/marks/results/${id}/generate-report/`, {});
       await loadData();
     } catch (error) {
       // noop
+    } finally {
+      setGeneratingIds((prev) => prev.filter(gid => gid !== id));
     }
   };
 
-  const sendReport = async (id) => {
+  const generateAllReports = async () => {
     try {
-      await api.post(`/marks/results/${id}/send-report/`, {});
+      setGeneratingAll(true);
+      await api.post(`/marks/results/generate-all-reports/`, {});
       await loadData();
     } catch (error) {
       // noop
+    } finally {
+      setGeneratingAll(false);
+    }
+  };
+
+  const sendReport = async (id, payload = { whatsapp: true, sms: false }) => {
+    try {
+      setSendingIds((prev) => [...prev, id]);
+      await api.post(`/marks/results/${id}/send-report/`, payload);
+      await loadData();
+    } catch (error) {
+      // noop
+    } finally {
+      setSendingIds((prev) => prev.filter(sid => sid !== id));
     }
   };
 
@@ -136,13 +159,28 @@ export const MarksResultsPage = () => {
 
         {tab === 'AI Reports' ? (
           <Card>
-            <CardHeader title="AI Reports" right={<Button>Generate All Reports</Button>} />
+            <CardHeader title="AI Reports" right={<Button onClick={generateAllReports} loading={generatingAll}>Generate All Reports</Button>} />
             <CardBody className="space-y-3">
               <table className="w-full text-sm"><thead className="text-left text-muted"><tr><th>Student</th><th>Exam</th><th>Status</th><th>Preview</th><th>Action</th></tr></thead><tbody>
-                {filteredResults.slice(0, 8).map((r) => <tr key={r.id} className="border-t border-border"><td className="py-2">{r.student_name}</td><td>{r.exam_name}</td><td>{r.ai_report ? '✅ Generated' : '⏳ Pending'}</td><td>{r.ai_report ? <button onClick={() => setPreview(r)} className="text-indigo-300">👁️</button> : '—'}</td><td>{!r.ai_report ? <Button variant="outline" className="text-xs" onClick={() => generateReport(r.id)}>Generate</Button> : <Button variant="success" className="text-xs" onClick={() => sendReport(r.id)}>Send</Button>}</td></tr>)}
+                {filteredResults.slice(0, 8).map((r) => {
+                  const isGenerating = generatingIds.includes(r.id);
+                  return (
+                    <tr key={r.id} className="border-t border-border">
+                      <td className="py-2">{r.student_name}</td>
+                      <td>{r.exam_name}</td>
+                      <td>{r.ai_report ? '✅ Generated' : isGenerating ? '🔄 Generating...' : '⏳ Pending'}</td>
+                      <td>{r.ai_report ? <button onClick={() => setPreview(r)} className="text-indigo-300">👁️</button> : '—'}</td>
+                      <td>
+                        {!r.ai_report ? (
+                          <Button variant="outline" className="text-xs" loading={isGenerating} onClick={() => generateReport(r.id)}>Generate</Button>
+                        ) : (
+                          <Button variant="success" className="text-xs" loading={sendingIds.includes(r.id)} onClick={() => sendReport(r.id, { whatsapp: true, sms: false })}>Send</Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody></table>
-              <div className="w-full h-2 rounded bg-slate-700"><div className="h-2 rounded bg-primary" style={{ width: '46%' }} /></div>
-              <div className="text-xs text-muted">Generating report for Meena S...</div>
               <Button variant="warning">Bulk Send All</Button>
             </CardBody>
           </Card>
@@ -154,8 +192,24 @@ export const MarksResultsPage = () => {
               <h4 className="font-semibold">{preview.student_name} — {preview.exam_name}</h4>
               <div className="p-3 rounded-lg border border-border bg-slate-900 text-sm text-muted">{preview.ai_report || 'Report not generated yet.'}</div>
               <TextArea rows={5} defaultValue={preview.ai_report || ''} />
-              <div className="flex items-center gap-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" defaultChecked /> Send via WhatsApp</label><label className="flex items-center gap-2"><input type="checkbox" /> Send via SMS</label></div>
-              <Button variant="success">Send Report</Button>
+              <div className="flex items-center gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={viaWhatsApp} onChange={(e) => setViaWhatsApp(e.target.checked)} /> Send via WhatsApp
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={viaSMS} onChange={(e) => setViaSMS(e.target.checked)} /> Send via SMS
+                </label>
+              </div>
+              <Button 
+                variant="success" 
+                loading={sendingIds.includes(preview.id)}
+                onClick={async () => {
+                  await sendReport(preview.id, { whatsapp: viaWhatsApp, sms: viaSMS });
+                  setPreview(null);
+                }}
+              >
+                Send Report
+              </Button>
             </div>
           ) : null}
         </Modal>

@@ -206,7 +206,9 @@ class ResultSendReportView(APIView):
             result = StudentResult.objects.select_related("student").get(pk=pk)
             if not user_can_access_class(request.user, result.student.class_name):
                 return error_response("You can only send reports for your in-charge class", status.HTTP_403_FORBIDDEN)
-            sent = NotificationService().send_result_report(result)
+            via_whatsapp = request.data.get("whatsapp", True)
+            via_sms = request.data.get("sms", False)
+            sent = NotificationService().send_result_report(result, via_whatsapp=via_whatsapp, via_sms=via_sms)
             if sent:
                 result.report_sent = True
                 result.report_sent_at = timezone.now()
