@@ -1,3 +1,4 @@
+from .academic import FacultyProfileSerializer, SchoolClassSerializer, TimetableEntrySerializer
 from .attendance import AttendanceRecordSerializer
 from .engagement import EngagementLogSerializer, PeriodEngagementSummarySerializer
 from .leave import LeaveRequestSerializer, UnexcusedAbsenceSerializer

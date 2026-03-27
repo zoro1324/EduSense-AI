@@ -12,6 +12,7 @@ class SafetyAlertSerializer(serializers.ModelSerializer):
             "id",
             "alert_type",
             "threat_level",
+            "class_name",
             "location",
             "timestamp",
             "snapshot",
