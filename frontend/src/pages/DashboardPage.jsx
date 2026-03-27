@@ -33,8 +33,36 @@ export const DashboardPage = () => {
     load();
   }, []);
 
-  const presentToday = attendanceToday.filter((x) => x.status === 'present').length;
-  const absentToday = attendanceToday.filter((x) => x.status === 'absent').length;
+  const latestAttendanceByStudent = useMemo(() => {
+    const latestByStudent = new Map();
+
+    attendanceToday.forEach((record) => {
+      const studentId = record.student;
+      if (!studentId) {
+        return;
+      }
+
+      const existing = latestByStudent.get(studentId);
+      if (!existing) {
+        latestByStudent.set(studentId, record);
+        return;
+      }
+
+      const recordPeriod = Number(record.period || 0);
+      const existingPeriod = Number(existing.period || 0);
+      const recordMarkedAt = record.marked_at ? new Date(record.marked_at).getTime() : 0;
+      const existingMarkedAt = existing.marked_at ? new Date(existing.marked_at).getTime() : 0;
+
+      if (recordPeriod > existingPeriod || (recordPeriod === existingPeriod && recordMarkedAt > existingMarkedAt)) {
+        latestByStudent.set(studentId, record);
+      }
+    });
+
+    return Array.from(latestByStudent.values());
+  }, [attendanceToday]);
+
+  const presentToday = latestAttendanceByStudent.filter((x) => x.status === 'present').length;
+  const absentToday = latestAttendanceByStudent.filter((x) => x.status === 'absent' || x.status === 'late').length;
   const unresolved = safetyAlerts.filter((a) => a.status === 'unresolved');
 
   const periodEngagementToday = useMemo(() => {

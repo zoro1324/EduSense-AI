@@ -78,11 +78,28 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const isLoggedIn = Boolean(token);
-  const isAdmin = user?.role === 'admin';
+  const managedClasses = Array.isArray(user?.managed_classes) ? user.managed_classes : [];
+  const isPrincipal = ['principal', 'admin'].includes(user?.role || '');
+  const isIncharge = !isPrincipal && managedClasses.length > 0;
+  const userDisplayName =
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || user?.email || 'User';
+  const isAdmin = isPrincipal;
 
   const value = useMemo(
-    () => ({ isLoggedIn, token, user, isAdmin, authLoading, login, logout }),
-    [isLoggedIn, token, user, isAdmin, authLoading]
+    () => ({
+      isLoggedIn,
+      token,
+      user,
+      isAdmin,
+      isPrincipal,
+      isIncharge,
+      managedClasses,
+      userDisplayName,
+      authLoading,
+      login,
+      logout,
+    }),
+    [isLoggedIn, token, user, isAdmin, isPrincipal, isIncharge, managedClasses, userDisplayName, authLoading]
   );
 
   return (
