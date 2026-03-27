@@ -1,8 +1,12 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from api.access_control import get_managed_class_names
+
 
 class UserSerializer(serializers.ModelSerializer):
+    managed_classes = serializers.SerializerMethodField()
+
     class Meta:
         model = get_user_model()
         fields = [
@@ -15,10 +19,15 @@ class UserSerializer(serializers.ModelSerializer):
             "is_active",
             "first_name",
             "last_name",
+            "managed_classes",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_managed_classes(self, obj):
+        managed = get_managed_class_names(obj)
+        return [] if managed is None else managed
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
