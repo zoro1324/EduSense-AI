@@ -15,22 +15,26 @@ export const MarksResultsPage = () => {
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
   const [resultRows, setResultRows] = useState([]);
+  const [marksRows, setMarksRows] = useState([]);
   const [examList, setExamList] = useState([]);
 
   const loadData = async () => {
     try {
-      const [resultsData, examsData] = await Promise.all([
+      const [resultsData, examsData, marksData] = await Promise.all([
         api.get('/marks/results/'),
         api.get('/marks/exams/'),
+        api.get('/marks/'),
       ]);
       setResultRows(Array.isArray(resultsData) ? resultsData : []);
+      setMarksRows(Array.isArray(marksData) ? marksData : []);
       const exams = Array.isArray(examsData) ? examsData : [];
       setExamList(exams);
-      if (exams.length) {
+      if (exams.length && !exam) {
         setExam(exams[0].name);
       }
     } catch (error) {
       setResultRows([]);
+      setMarksRows([]);
       setExamList([]);
     }
   };
@@ -42,10 +46,24 @@ export const MarksResultsPage = () => {
   const filteredResults = useMemo(
     () =>
       resultRows
-        .filter((m) => !className || m.student_name)
+        .filter((m) => !className || m.class_name === className)
         .filter((m) => !exam || m.exam_name === exam),
     [resultRows, className, exam]
   );
+
+  const dynamicSubjects = useMemo(() => {
+    const matchingMarks = marksRows.filter(m => 
+      m.exam_name === exam && 
+      filteredResults.some(r => String(r.student) === String(m.student))
+    );
+    return [...new Set(matchingMarks.map(m => m.subject_name))].sort();
+  }, [marksRows, exam, filteredResults]);
+
+  const filteredExams = useMemo(() => {
+    const classExams = examList.filter(e => e.class_name === className);
+    const names = [...new Set(classExams.map(e => e.name))];
+    return names.length ? names : [...new Set(examList.map(e => e.name))];
+  }, [examList, className]);
 
   const subjectAvg = [
     { subject: 'Average %', avg: filteredResults.length ? Math.round(filteredResults.reduce((acc, r) => acc + Number(r.percentage || 0), 0) / filteredResults.length) : 0 },
@@ -78,9 +96,23 @@ export const MarksResultsPage = () => {
         {tab === 'Add Marks' ? (
           <Card>
             <CardBody className="space-y-3">
-              <div className="grid md:grid-cols-2 gap-2"><Select value={className} onChange={(e) => setClassName(e.target.value)}><option>10A</option><option>11A</option><option>12A</option></Select><Select value={exam} onChange={(e) => setExam(e.target.value)}>{examList.map((x) => <option key={x.id}>{x.name}</option>)}</Select></div>
-              <div className="overflow-auto thin-scrollbar"><table className="w-full min-w-[1000px] text-sm"><thead className="text-left text-muted"><tr><th>Student</th><th>Tamil</th><th>English</th><th>Maths</th><th>Science</th><th>Social</th><th>Total</th><th>Grade</th></tr></thead><tbody>
-                {filteredResults.map((r) => <tr key={r.id} className="border-t border-border hover:bg-slate-800/60"><td className="py-2">{r.student_name}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>{r.total_marks}</td><td>{r.grade || gradeOf(r.percentage || 0)}</td></tr>)}
+              <div className="grid md:grid-cols-2 gap-2"><Select value={className} onChange={(e) => setClassName(e.target.value)}><option>10A</option><option>11A</option><option>12A</option></Select><Select value={exam} onChange={(e) => setExam(e.target.value)}>{filteredExams.map((examName) => <option key={examName}>{examName}</option>)}</Select></div>
+              <div className="overflow-auto thin-scrollbar"><table className="w-full min-w-[1000px] text-sm"><thead className="text-left text-muted"><tr><th>Student</th>{dynamicSubjects.map(sub => <th key={sub}>{sub}</th>)}<th>Total</th><th>Grade</th></tr></thead><tbody>
+                {filteredResults.map((r) => {
+                  const sMarks = marksRows.filter(m => String(m.student) === String(r.student) && m.exam_name === r.exam_name);
+                  const getMark = (subj) => {
+                    const found = sMarks.find(m => m.subject_name === subj);
+                    return found ? found.marks_obtained : '-';
+                  };
+                  return (
+                    <tr key={r.id} className="border-t border-border hover:bg-slate-800/60">
+                      <td className="py-2">{r.student_name}</td>
+                      {dynamicSubjects.map(sub => <td key={sub}>{getMark(sub)}</td>)}
+                      <td>{r.total_marks}</td>
+                      <td>{r.grade || gradeOf(r.percentage || 0)}</td>
+                    </tr>
+                  );
+                })}
               </tbody></table></div>
               <Button variant="outline">Upload CSV</Button>
               <Button className="w-full" loading={saving} onClick={() => { setSaving(true); setTimeout(() => setSaving(false), 1000); }}>Save Marks</Button>
