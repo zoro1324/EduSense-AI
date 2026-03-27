@@ -1,5 +1,13 @@
 from django.urls import path
 
+from api.views.academic import (
+    FacultyDetailView,
+    FacultyListCreateView,
+    SchoolClassDetailView,
+    SchoolClassListCreateView,
+    TimetableDetailView,
+    TimetableListCreateView,
+)
 from api.views.attendance import (
     AttendanceCameraMarkView,
     AttendanceDailyView,
@@ -81,6 +89,13 @@ urlpatterns = [
 
     path("users/", UserListCreateView.as_view()),
     path("users/<int:pk>/", UserDetailView.as_view()),
+
+    path("academic/classes/", SchoolClassListCreateView.as_view()),
+    path("academic/classes/<int:pk>/", SchoolClassDetailView.as_view()),
+    path("academic/faculties/", FacultyListCreateView.as_view()),
+    path("academic/faculties/<int:pk>/", FacultyDetailView.as_view()),
+    path("academic/timetable/", TimetableListCreateView.as_view()),
+    path("academic/timetable/<int:pk>/", TimetableDetailView.as_view()),
 
     path("students/", StudentListCreateView.as_view()),
     path("students/classes/", StudentClassesView.as_view()),

@@ -27,7 +27,7 @@ class SafetyAlertFilter(django_filters.FilterSet):
 
     class Meta:
         model = SafetyAlert
-        fields = ["alert_type", "threat_level", "status", "location", "start_timestamp", "end_timestamp"]
+        fields = ["alert_type", "threat_level", "status", "class_name", "location", "start_timestamp", "end_timestamp"]
 
 
 class LeaveRequestFilter(django_filters.FilterSet):
