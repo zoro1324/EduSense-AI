@@ -4,6 +4,7 @@ from rest_framework import permissions, status
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from api.access_control import is_principal
 from api.serializers import ChangePasswordSerializer, UserCreateSerializer, UserSerializer
 from api.views import error_response, success_response
 
@@ -99,6 +100,8 @@ class ChangePasswordView(APIView):
 class UserListCreateView(APIView):
     def get(self, request):
         try:
+            if not is_principal(request.user):
+                return error_response("Only principal can view users", status.HTTP_403_FORBIDDEN)
             users = get_user_model().objects.all().order_by("-id")
             return success_response(UserSerializer(users, many=True).data)
         except Exception as exc:
@@ -106,6 +109,8 @@ class UserListCreateView(APIView):
 
     def post(self, request):
         try:
+            if not is_principal(request.user):
+                return error_response("Only principal can create users", status.HTTP_403_FORBIDDEN)
             serializer = UserCreateSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             user = serializer.save()
@@ -117,6 +122,8 @@ class UserListCreateView(APIView):
 class UserDetailView(APIView):
     def get(self, request, pk):
         try:
+            if not is_principal(request.user):
+                return error_response("Only principal can view users", status.HTTP_403_FORBIDDEN)
             user = get_user_model().objects.get(pk=pk)
             return success_response(UserSerializer(user).data)
         except get_user_model().DoesNotExist:
@@ -126,6 +133,8 @@ class UserDetailView(APIView):
 
     def put(self, request, pk):
         try:
+            if not is_principal(request.user):
+                return error_response("Only principal can update users", status.HTTP_403_FORBIDDEN)
             user = get_user_model().objects.get(pk=pk)
             serializer = UserSerializer(user, data=request.data, partial=False)
             serializer.is_valid(raise_exception=True)
@@ -138,6 +147,8 @@ class UserDetailView(APIView):
 
     def delete(self, request, pk):
         try:
+            if not is_principal(request.user):
+                return error_response("Only principal can delete users", status.HTTP_403_FORBIDDEN)
             user = get_user_model().objects.get(pk=pk)
             user.delete()
             return success_response({"message": "User deleted"})
