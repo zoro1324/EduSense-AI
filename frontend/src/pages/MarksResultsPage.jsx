@@ -14,23 +14,32 @@ export const MarksResultsPage = () => {
   const [exam, setExam] = useState('Quarterly');
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [generatingIds, setGeneratingIds] = useState([]);
+  const [generatingAll, setGeneratingAll] = useState(false);
+  const [sendingIds, setSendingIds] = useState([]);
+  const [viaWhatsApp, setViaWhatsApp] = useState(false);
+  const [viaSMS, setViaSMS] = useState(true);
   const [resultRows, setResultRows] = useState([]);
+  const [marksRows, setMarksRows] = useState([]);
   const [examList, setExamList] = useState([]);
 
   const loadData = async () => {
     try {
-      const [resultsData, examsData] = await Promise.all([
+      const [resultsData, examsData, marksData] = await Promise.all([
         api.get('/marks/results/'),
         api.get('/marks/exams/'),
+        api.get('/marks/'),
       ]);
       setResultRows(Array.isArray(resultsData) ? resultsData : []);
+      setMarksRows(Array.isArray(marksData) ? marksData : []);
       const exams = Array.isArray(examsData) ? examsData : [];
       setExamList(exams);
-      if (exams.length) {
+      if (exams.length && !exam) {
         setExam(exams[0].name);
       }
     } catch (error) {
       setResultRows([]);
+      setMarksRows([]);
       setExamList([]);
     }
   };
@@ -42,10 +51,24 @@ export const MarksResultsPage = () => {
   const filteredResults = useMemo(
     () =>
       resultRows
-        .filter((m) => !className || m.student_name)
+        .filter((m) => !className || m.class_name === className)
         .filter((m) => !exam || m.exam_name === exam),
     [resultRows, className, exam]
   );
+
+  const dynamicSubjects = useMemo(() => {
+    const matchingMarks = marksRows.filter(m => 
+      m.exam_name === exam && 
+      filteredResults.some(r => String(r.student) === String(m.student))
+    );
+    return [...new Set(matchingMarks.map(m => m.subject_name))].sort();
+  }, [marksRows, exam, filteredResults]);
+
+  const filteredExams = useMemo(() => {
+    const classExams = examList.filter(e => e.class_name === className);
+    const names = [...new Set(classExams.map(e => e.name))];
+    return names.length ? names : [...new Set(examList.map(e => e.name))];
+  }, [examList, className]);
 
   const subjectAvg = [
     { subject: 'Average %', avg: filteredResults.length ? Math.round(filteredResults.reduce((acc, r) => acc + Number(r.percentage || 0), 0) / filteredResults.length) : 0 },
@@ -53,19 +76,37 @@ export const MarksResultsPage = () => {
 
   const generateReport = async (id) => {
     try {
+      setGeneratingIds((prev) => [...prev, id]);
       await api.post(`/marks/results/${id}/generate-report/`, {});
       await loadData();
     } catch (error) {
       // noop
+    } finally {
+      setGeneratingIds((prev) => prev.filter(gid => gid !== id));
     }
   };
 
-  const sendReport = async (id) => {
+  const generateAllReports = async () => {
     try {
-      await api.post(`/marks/results/${id}/send-report/`, {});
+      setGeneratingAll(true);
+      await api.post(`/marks/results/generate-all-reports/`, {});
       await loadData();
     } catch (error) {
       // noop
+    } finally {
+      setGeneratingAll(false);
+    }
+  };
+
+  const sendReport = async (id, payload = { whatsapp: true, sms: false }) => {
+    try {
+      setSendingIds((prev) => [...prev, id]);
+      await api.post(`/marks/results/${id}/send-report/`, payload);
+      await loadData();
+    } catch (error) {
+      // noop
+    } finally {
+      setSendingIds((prev) => prev.filter(sid => sid !== id));
     }
   };
 
@@ -78,9 +119,23 @@ export const MarksResultsPage = () => {
         {tab === 'Add Marks' ? (
           <Card>
             <CardBody className="space-y-3">
-              <div className="grid md:grid-cols-2 gap-2"><Select value={className} onChange={(e) => setClassName(e.target.value)}><option>10A</option><option>11A</option><option>12A</option></Select><Select value={exam} onChange={(e) => setExam(e.target.value)}>{examList.map((x) => <option key={x.id}>{x.name}</option>)}</Select></div>
-              <div className="overflow-auto thin-scrollbar"><table className="w-full min-w-[1000px] text-sm"><thead className="text-left text-muted"><tr><th>Student</th><th>Tamil</th><th>English</th><th>Maths</th><th>Science</th><th>Social</th><th>Total</th><th>Grade</th></tr></thead><tbody>
-                {filteredResults.map((r) => <tr key={r.id} className="border-t border-border hover:bg-slate-800/60"><td className="py-2">{r.student_name}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>{r.total_marks}</td><td>{r.grade || gradeOf(r.percentage || 0)}</td></tr>)}
+              <div className="grid md:grid-cols-2 gap-2"><Select value={className} onChange={(e) => setClassName(e.target.value)}><option>10A</option><option>11A</option><option>12A</option></Select><Select value={exam} onChange={(e) => setExam(e.target.value)}>{filteredExams.map((examName) => <option key={examName}>{examName}</option>)}</Select></div>
+              <div className="overflow-auto thin-scrollbar"><table className="w-full min-w-[1000px] text-sm"><thead className="text-left text-muted"><tr><th>Student</th>{dynamicSubjects.map(sub => <th key={sub}>{sub}</th>)}<th>Total</th><th>Grade</th></tr></thead><tbody>
+                {filteredResults.map((r) => {
+                  const sMarks = marksRows.filter(m => String(m.student) === String(r.student) && m.exam_name === r.exam_name);
+                  const getMark = (subj) => {
+                    const found = sMarks.find(m => m.subject_name === subj);
+                    return found ? found.marks_obtained : '-';
+                  };
+                  return (
+                    <tr key={r.id} className="border-t border-border hover:bg-slate-800/60">
+                      <td className="py-2">{r.student_name}</td>
+                      {dynamicSubjects.map(sub => <td key={sub}>{getMark(sub)}</td>)}
+                      <td>{r.total_marks}</td>
+                      <td>{r.grade || gradeOf(r.percentage || 0)}</td>
+                    </tr>
+                  );
+                })}
               </tbody></table></div>
               <Button variant="outline">Upload CSV</Button>
               <Button className="w-full" loading={saving} onClick={() => { setSaving(true); setTimeout(() => setSaving(false), 1000); }}>Save Marks</Button>
@@ -104,13 +159,28 @@ export const MarksResultsPage = () => {
 
         {tab === 'AI Reports' ? (
           <Card>
-            <CardHeader title="AI Reports" right={<Button>Generate All Reports</Button>} />
+            <CardHeader title="AI Reports" right={<Button onClick={generateAllReports} loading={generatingAll}>Generate All Reports</Button>} />
             <CardBody className="space-y-3">
               <table className="w-full text-sm"><thead className="text-left text-muted"><tr><th>Student</th><th>Exam</th><th>Status</th><th>Preview</th><th>Action</th></tr></thead><tbody>
-                {filteredResults.slice(0, 8).map((r) => <tr key={r.id} className="border-t border-border"><td className="py-2">{r.student_name}</td><td>{r.exam_name}</td><td>{r.ai_report ? '✅ Generated' : '⏳ Pending'}</td><td>{r.ai_report ? <button onClick={() => setPreview(r)} className="text-indigo-300">👁️</button> : '—'}</td><td>{!r.ai_report ? <Button variant="outline" className="text-xs" onClick={() => generateReport(r.id)}>Generate</Button> : <Button variant="success" className="text-xs" onClick={() => sendReport(r.id)}>Send</Button>}</td></tr>)}
+                {filteredResults.slice(0, 8).map((r) => {
+                  const isGenerating = generatingIds.includes(r.id);
+                  return (
+                    <tr key={r.id} className="border-t border-border">
+                      <td className="py-2">{r.student_name}</td>
+                      <td>{r.exam_name}</td>
+                      <td>{r.ai_report ? '✅ Generated' : isGenerating ? '🔄 Generating...' : '⏳ Pending'}</td>
+                      <td>{r.ai_report ? <button onClick={() => setPreview(r)} className="text-indigo-300">👁️</button> : '—'}</td>
+                      <td>
+                        {!r.ai_report ? (
+                          <Button variant="outline" className="text-xs" loading={isGenerating} onClick={() => generateReport(r.id)}>Generate</Button>
+                        ) : (
+                          <Button variant="success" className="text-xs" loading={sendingIds.includes(r.id)} onClick={() => sendReport(r.id, { whatsapp: true, sms: false })}>Send</Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody></table>
-              <div className="w-full h-2 rounded bg-slate-700"><div className="h-2 rounded bg-primary" style={{ width: '46%' }} /></div>
-              <div className="text-xs text-muted">Generating report for Meena S...</div>
               <Button variant="warning">Bulk Send All</Button>
             </CardBody>
           </Card>
@@ -122,8 +192,24 @@ export const MarksResultsPage = () => {
               <h4 className="font-semibold">{preview.student_name} — {preview.exam_name}</h4>
               <div className="p-3 rounded-lg border border-border bg-slate-900 text-sm text-muted">{preview.ai_report || 'Report not generated yet.'}</div>
               <TextArea rows={5} defaultValue={preview.ai_report || ''} />
-              <div className="flex items-center gap-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" defaultChecked /> Send via WhatsApp</label><label className="flex items-center gap-2"><input type="checkbox" /> Send via SMS</label></div>
-              <Button variant="success">Send Report</Button>
+              <div className="flex items-center gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={viaWhatsApp} onChange={(e) => setViaWhatsApp(e.target.checked)} /> Send via WhatsApp
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={viaSMS} onChange={(e) => setViaSMS(e.target.checked)} /> Send via SMS
+                </label>
+              </div>
+              <Button 
+                variant="success" 
+                loading={sendingIds.includes(preview.id)}
+                onClick={async () => {
+                  await sendReport(preview.id, { whatsapp: viaWhatsApp, sms: viaSMS });
+                  setPreview(null);
+                }}
+              >
+                Send Report
+              </Button>
             </div>
           ) : null}
         </Modal>

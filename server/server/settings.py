@@ -177,6 +177,17 @@ ENGAGEMENT_WINDOW_TITLE = config('ENGAGEMENT_WINDOW_TITLE', default='Classroom E
 ENGAGEMENT_CLASS_NAME = config('ENGAGEMENT_CLASS_NAME', default='Classroom A')
 ENGAGEMENT_PERIOD = config('ENGAGEMENT_PERIOD', cast=int, default=1)
 
+RAGGING_MONITOR_ENABLED = config('RAGGING_MONITOR_ENABLED', cast=bool, default=True)
+RAGGING_PERSON_MODEL_PATH = config('RAGGING_PERSON_MODEL_PATH', default='yolov8n.pt')
+RAGGING_POSE_MODEL_PATH = config('RAGGING_POSE_MODEL_PATH', default='yolov8n-pose.pt')
+RAGGING_CONF_THRESHOLD = config('RAGGING_CONF_THRESHOLD', cast=float, default=0.3)
+RAGGING_IMAGE_SIZE = config('RAGGING_IMAGE_SIZE', cast=int, default=640)
+RAGGING_DETECTION_INTERVAL = config('RAGGING_DETECTION_INTERVAL', cast=int, default=2)
+RAGGING_CLUSTER_DISTANCE = config('RAGGING_CLUSTER_DISTANCE', cast=float, default=150.0)
+RAGGING_ISOLATION_RATIO = config('RAGGING_ISOLATION_RATIO', cast=float, default=1.35)
+RAGGING_ALERT_COOLDOWN_SECONDS = config('RAGGING_ALERT_COOLDOWN_SECONDS', cast=int, default=30)
+RAGGING_LOCATION = config('RAGGING_LOCATION', default='Classroom')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -211,6 +222,16 @@ LOGGING = {
         'django.request': {
             'handlers': ['console'],
             'level': 'DEBUG',
+            'propagate': False,
+        },
+        'twilio.http_client': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'urllib3': {
+            'handlers': ['console'],
+            'level': 'WARNING',
             'propagate': False,
         },
     },

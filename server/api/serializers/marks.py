@@ -39,6 +39,7 @@ class StudentMarkSerializer(serializers.ModelSerializer):
 
 class StudentResultSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.name", read_only=True)
+    class_name = serializers.CharField(source="student.class_name", read_only=True)
     exam_name = serializers.CharField(source="exam_type.name", read_only=True)
 
     class Meta:
@@ -47,6 +48,7 @@ class StudentResultSerializer(serializers.ModelSerializer):
             "id",
             "student",
             "student_name",
+            "class_name",
             "exam_type",
             "exam_name",
             "total_marks",

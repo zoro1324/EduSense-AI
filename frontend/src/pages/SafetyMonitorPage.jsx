@@ -4,12 +4,16 @@ import { Badge, Button, Card, CardBody, CardHeader, Input, PageContainer, PageTi
 import { Modal } from '../components/ui/Modal';
 import { TableWrapper } from '../components/ui/Table';
 import { useToast } from '../components/ui/ToastContext';
-import { api } from '../lib/api';
+import { api, API_BASE_URL } from '../lib/api';
 
 export const SafetyMonitorPage = () => {
   const [location, setLocation] = useState('Block A');
   const [snapshot, setSnapshot] = useState(null);
   const [alerts, setAlerts] = useState([]);
+  const [historyDate, setHistoryDate] = useState('');
+  const [historyLocation, setHistoryLocation] = useState('All Locations');
+  const [historyStatus, setHistoryStatus] = useState('All Status');
+  const [searchQuery, setSearchQuery] = useState('');
   const { pushToast } = useToast();
 
   useEffect(() => {
@@ -22,10 +26,45 @@ export const SafetyMonitorPage = () => {
       }
     };
     load();
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  const threat = 'Warning';
   const unresolved = useMemo(() => alerts.filter((a) => a.status === 'unresolved'), [alerts]);
+  
+  const threat = useMemo(() => {
+    if (unresolved.length === 0) return 'Normal';
+    if (unresolved.some((a) => a.threat_level === 'high')) return 'Critical';
+    if (unresolved.some((a) => a.threat_level === 'medium')) return 'Warning';
+    return 'Normal';
+  }, [unresolved]);
+
+  const latestAlert = alerts.length > 0 ? alerts[0] : null;
+
+  const getSnapshotUrl = (snapshotPath) => {
+    if (!snapshotPath) return '';
+    if (String(snapshotPath).startsWith('http')) return snapshotPath;
+    try {
+      const parsed = new URL(API_BASE_URL);
+      const origin = `${parsed.protocol}//${parsed.host}`;
+      const path = String(snapshotPath).replace(/^\/+/, '');
+      return `${origin}${path.startsWith('media/') ? '/' : '/media/'}${path}`;
+    } catch {
+      return '';
+    }
+  };
+
+  const feedUrl = useMemo(() => getSnapshotUrl(latestAlert?.snapshot), [latestAlert]);
+
+  const filteredHistory = useMemo(() => {
+    return alerts.filter((a) => {
+      if (historyDate && !a.timestamp.startsWith(historyDate)) return false;
+      if (historyLocation !== 'All Locations' && a.location !== historyLocation) return false;
+      if (historyStatus !== 'All Status' && a.status !== historyStatus.toLowerCase()) return false;
+      if (searchQuery && !a.location.toLowerCase().includes(searchQuery.toLowerCase()) && !a.alert_type?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+  }, [alerts, historyDate, historyLocation, historyStatus, searchQuery]);
 
   const resolveAlert = async (id) => {
     try {
@@ -49,9 +88,17 @@ export const SafetyMonitorPage = () => {
             </Select>
             <Card>
               <CardBody>
-                <div className="relative aspect-video border border-border rounded-xl bg-slate-700/40 grid place-items-center text-muted">
-                  <div className="text-center"><div className="text-5xl">🛡️</div><p>Safety Feed</p></div>
-                  <div className="absolute top-3 right-3"><Badge tone="warning">🟡 {threat}</Badge></div>
+                <div className="relative aspect-video border border-border rounded-xl bg-slate-700/40 grid place-items-center text-muted overflow-hidden">
+                  {feedUrl ? (
+                    <img src={feedUrl} alt="Safety Feed" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-center"><div className="text-5xl">🛡️</div><p>Safety Feed</p></div>
+                  )}
+                  <div className="absolute top-3 right-3">
+                    <Badge tone={threat === 'Critical' ? 'danger' : threat === 'Warning' ? 'warning' : 'success'}>
+                      {threat === 'Normal' ? '🟢' : threat === 'Warning' ? '🟡' : '🔴'} {threat}
+                    </Badge>
+                  </div>
                 </div>
               </CardBody>
             </Card>
@@ -93,14 +140,24 @@ export const SafetyMonitorPage = () => {
           <CardHeader title="Alert History" right={<Button variant="outline">Export Report</Button>} />
           <CardBody className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-              <Input type="date" />
-              <Select><option>All Locations</option><option>Block A</option><option>Block B</option><option>Corridor</option></Select>
-              <Select><option>All Status</option><option>Resolved</option><option>Unresolved</option></Select>
-              <Input placeholder="Search" />
+              <Input type="date" value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} />
+              <Select value={historyLocation} onChange={(e) => setHistoryLocation(e.target.value)}>
+                <option>All Locations</option>
+                <option>Block A</option>
+                <option>Block B</option>
+                <option>Corridor</option>
+                <option>Canteen</option>
+              </Select>
+              <Select value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value)}>
+                <option>All Status</option>
+                <option>Resolved</option>
+                <option>Unresolved</option>
+              </Select>
+              <Input placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
             <TableWrapper
               columns={['Time', 'Location', 'Snapshot', 'Threat Level', 'Status', 'Action']}
-              rows={alerts}
+              rows={filteredHistory}
               renderRow={(a) => (
                 <tr key={a.id} className="border-b border-border hover:bg-slate-800/60">
                   <td className="px-3 py-2">{new Date(a.timestamp).toLocaleString()}</td>
@@ -118,7 +175,13 @@ export const SafetyMonitorPage = () => {
         <Modal isOpen={Boolean(snapshot)} onClose={() => setSnapshot(null)} title="Snapshot Preview">
           {snapshot ? (
             <div className="space-y-3">
-              <div className="h-56 bg-slate-700/40 border border-border rounded-lg grid place-items-center text-muted">Image placeholder ({snapshot.snapshot})</div>
+              <div className="h-auto w-full bg-slate-700/40 border border-border rounded-lg grid place-items-center text-muted overflow-hidden">
+                {snapshot.snapshot ? (
+                  <img src={getSnapshotUrl(snapshot.snapshot)} alt="Snapshot" className="w-full h-auto" />
+                ) : (
+                  <div className="h-56 grid place-items-center">No image available</div>
+                )}
+              </div>
               <p className="text-sm text-muted">{new Date(snapshot.timestamp).toLocaleString()} · {snapshot.location}</p>
               <Badge tone={snapshot.threat_level === 'high' ? 'danger' : snapshot.threat_level === 'medium' ? 'warning' : 'success'}>{snapshot.threat_level}</Badge>
             </div>

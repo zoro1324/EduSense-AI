@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from django.conf import settings
@@ -5,6 +6,8 @@ from twilio.base.exceptions import TwilioException
 from twilio.rest import Client
 
 from api.models import NotificationLog, NotificationTemplate
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
@@ -29,6 +32,8 @@ class NotificationService:
             return ""
 
     def send_whatsapp(self, phone, message, student=None, notification_type=None):
+        # Trial account override: Send all messages to ADMIN_PHONE
+        phone = settings.ADMIN_PHONE
         formatted_phone = self._format_indian_phone(phone)
         to_number = formatted_phone if formatted_phone.startswith("whatsapp:") else f"whatsapp:{formatted_phone}"
         try:
@@ -37,6 +42,7 @@ class NotificationService:
                 from_=settings.TWILIO_WHATSAPP_FROM,
                 to=to_number,
             )
+            logger.info(f"[WHATSAPP] Successfully sent to {to_number} (SID: {response.sid})")
             NotificationLog.objects.create(
                 notification_type=notification_type or NotificationLog.TYPE_WEEKLY_SUMMARY,
                 student=student,
@@ -49,6 +55,7 @@ class NotificationService:
             )
             return True
         except TwilioException as exc:
+            logger.error(f"[WHATSAPP] Failed to send to {to_number}. Reason: {str(exc)}")
             NotificationLog.objects.create(
                 notification_type=notification_type or NotificationLog.TYPE_WEEKLY_SUMMARY,
                 student=student,
@@ -61,6 +68,7 @@ class NotificationService:
             )
             return False
         except Exception as exc:
+            logger.error(f"[WHATSAPP] Unexpected error sending to {to_number}. Reason: {str(exc)}")
             NotificationLog.objects.create(
                 notification_type=notification_type or NotificationLog.TYPE_WEEKLY_SUMMARY,
                 student=student,
@@ -74,13 +82,21 @@ class NotificationService:
             return False
 
     def send_sms(self, phone, message, student=None, notification_type=None):
+        # Trial account override: Send all messages to ADMIN_PHONE
+        phone = settings.ADMIN_PHONE
         formatted_phone = self._format_indian_phone(phone)
+        
+        # Twilio SMS character limit is 1600 characters (Error 21617). Truncate if necessary.
+        if len(message) > 1500:
+            message = message[:1490] + "...\n(Message truncated)"
+
         try:
             response = self.client.messages.create(
                 body=message,
                 from_=settings.TWILIO_SMS_FROM,
                 to=formatted_phone,
             )
+            logger.info(f"[SMS] Successfully sent to {formatted_phone} (SID: {response.sid})")
             NotificationLog.objects.create(
                 notification_type=notification_type or NotificationLog.TYPE_WEEKLY_SUMMARY,
                 student=student,
@@ -93,6 +109,7 @@ class NotificationService:
             )
             return True
         except TwilioException as exc:
+            logger.error(f"[SMS] Failed to send to {formatted_phone}. Reason: {str(exc)}")
             NotificationLog.objects.create(
                 notification_type=notification_type or NotificationLog.TYPE_WEEKLY_SUMMARY,
                 student=student,
@@ -105,6 +122,7 @@ class NotificationService:
             )
             return False
         except Exception as exc:
+            logger.error(f"[SMS] Unexpected error sending to {formatted_phone}. Reason: {str(exc)}")
             NotificationLog.objects.create(
                 notification_type=notification_type or NotificationLog.TYPE_WEEKLY_SUMMARY,
                 student=student,
@@ -190,7 +208,7 @@ class NotificationService:
             notification_type=NotificationLog.TYPE_LEAVE_REJECTED,
         )
 
-    def send_result_report(self, student_result):
+    def send_result_report(self, student_result, via_whatsapp=True, via_sms=False):
         student = student_result.student
         if not hasattr(student, "parent"):
             return False
@@ -210,12 +228,23 @@ class NotificationService:
                 f"Result Report for {student.name} ({student_result.exam_type.name}): "
                 f"{student_result.percentage}% ({student_result.grade}).\n\n{student_result.ai_report}"
             )
-        return self.send_whatsapp(
-            student.parent.whatsapp_number,
-            message,
-            student=student,
-            notification_type=NotificationLog.TYPE_RESULT_REPORT,
-        )
+        
+        success = False
+        if via_whatsapp:
+            success = self.send_whatsapp(
+                student.parent.whatsapp_number,
+                message,
+                student=student,
+                notification_type=NotificationLog.TYPE_RESULT_REPORT,
+            ) or success
+        if via_sms:
+            success = self.send_sms(
+                student.parent.phone_number,
+                message,
+                student=student,
+                notification_type=NotificationLog.TYPE_RESULT_REPORT,
+            ) or success
+        return success
 
     def send_safety_alert_admin(self, alert):
         message = (
