@@ -17,6 +17,7 @@ class SafetyAlertSerializer(serializers.ModelSerializer):
             "timestamp",
             "snapshot",
             "person_count",
+            "recognized_persons",
             "description",
             "status",
             "resolved_by",

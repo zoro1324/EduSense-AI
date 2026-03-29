@@ -1020,6 +1020,20 @@ class EngagementMonitorService:
             now = timezone.now()
             snapshot_path = self._save_safety_snapshot(ragging_frame, now)
 
+            recognized_persons_str = ""
+            try:
+                from api.services.face_recognition_service import FaceRecognitionService
+                import cv2
+                _, buffer = cv2.imencode(".jpg", ragging_frame)
+                image_bytes = buffer.tobytes()
+
+                recognition_service = FaceRecognitionService()
+                result = recognition_service.recognize_face(image_bytes=image_bytes)
+                if result.matched and result.student_name:
+                    recognized_persons_str = result.student_name
+            except Exception as e:
+                logger.warning("[RAGGING_MONITOR] Face recognition failed: %s", e)
+
             close_old_connections()
             alert = SafetyAlert.objects.create(
                 alert_type=SafetyAlert.TYPE_RAGGING,
@@ -1027,6 +1041,7 @@ class EngagementMonitorService:
                 class_name=self.class_name,
                 location=self.ragging_location,
                 person_count=int(ragging_metrics.get("persons", 0) or 0),
+                recognized_persons=recognized_persons_str,
                 description=str(ragging_metrics.get("description", "")),
                 snapshot=snapshot_path or None,
             )

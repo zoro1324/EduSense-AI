@@ -115,6 +115,7 @@ export const SafetyMonitorPage = () => {
                       <span className="text-xs text-muted">{new Date(a.timestamp).toLocaleTimeString()}</span>
                     </div>
                     <p className="text-sm mt-2">{a.location}</p>
+                    {a.recognized_persons && <p className="text-xs font-semibold text-red-400 mt-1">Identified: {a.recognized_persons}</p>}
                     <div className="flex gap-2 mt-3 flex-wrap">
                       <Button variant="outline" className="text-xs px-2 py-1" onClick={() => setSnapshot(a)}>📸 View Snapshot</Button>
                       <Button variant="success" className="text-xs px-2 py-1" onClick={() => resolveAlert(a.id)}>Resolve</Button>
@@ -156,12 +157,13 @@ export const SafetyMonitorPage = () => {
               <Input placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
             <TableWrapper
-              columns={['Time', 'Location', 'Snapshot', 'Threat Level', 'Status', 'Action']}
+              columns={['Time', 'Location', 'Persons Identified', 'Snapshot', 'Threat Level', 'Status', 'Action']}
               rows={filteredHistory}
               renderRow={(a) => (
                 <tr key={a.id} className="border-b border-border hover:bg-slate-800/60">
                   <td className="px-3 py-2">{new Date(a.timestamp).toLocaleString()}</td>
                   <td className="px-3 py-2">{a.location}</td>
+                  <td className="px-3 py-2">{a.recognized_persons || <span className="text-muted">-</span>}</td>
                   <td className="px-3 py-2"><Button variant="outline" className="text-xs px-2 py-1" onClick={() => setSnapshot(a)}>View</Button></td>
                   <td className="px-3 py-2"><Badge tone={a.threat_level === 'high' ? 'danger' : a.threat_level === 'medium' ? 'warning' : 'success'}>{a.threat_level}</Badge></td>
                   <td className="px-3 py-2"><Badge tone={a.status === 'unresolved' ? 'danger' : 'success'}>{a.status}</Badge></td>
@@ -183,6 +185,7 @@ export const SafetyMonitorPage = () => {
                 )}
               </div>
               <p className="text-sm text-muted">{new Date(snapshot.timestamp).toLocaleString()} · {snapshot.location}</p>
+              {snapshot.recognized_persons && <p className="text-sm font-semibold text-red-400">Identified Persons: {snapshot.recognized_persons}</p>}
               <Badge tone={snapshot.threat_level === 'high' ? 'danger' : snapshot.threat_level === 'medium' ? 'warning' : 'success'}>{snapshot.threat_level}</Badge>
             </div>
           ) : null}
